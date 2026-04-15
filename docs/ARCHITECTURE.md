@@ -10,46 +10,46 @@ Describe StellarFund as a 3-layer system:
 
 Draw a clear ASCII art diagram showing:
 
-  ┌─────────────────────────────────────────────────────────┐
-  │                    User's Browser                        │
-  │                                                          │
-  │   Next.js 14 Frontend (Vercel)                          │
-  │   ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-  │   │  Browse  │  │  Create  │  │ Campaign │             │
-  │   │  Page /  │  │  Page    │  │  Detail  │             │
-  │   └────┬─────┘  └────┬─────┘  └────┬─────┘             │
-  │        └─────────────┴─────────────┘                    │
-  │                       │                                  │
-  │   ┌───────────────────▼────────────────────┐            │
-  │   │      lib/contract-client.ts            │            │
-  │   │   (FundContractClient + TxProgress)    │            │
-  │   └───────────────────┬────────────────────┘            │
-  │                       │                                  │
-  │   ┌───────────────────▼────────────────────┐            │
-  │   │      lib/stellar-helper.ts             │            │
-  │   │   (StellarWalletsKit + TTLCache)       │            │
-  │   └───────┬───────────────────┬────────────┘            │
-  └───────────┼───────────────────┼────────────────────────-┘
+  ┌────────────────────────────────────────────────┐
+  │                 User's Browser                 │
+  │                                                │
+  │   Next.js 14 Frontend (Vercel)                 │
+  │   ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+  │   │  Browse  │  │  Create  │  │ Campaign │     │
+  │   │  Page /  │  │  Page    │  │  Detail  │     │
+  │   └────┬─────┘  └────┬─────┘  └────┬─────┘     │
+  │        └─────────────┴─────────────┘           │
+  │                       │                        │
+  │   ┌───────────────────▼────────────────────┐   │
+  │   │      lib/contract-client.ts            │   │
+  │   │   (FundContractClient + TxProgress)    │   │
+  │   └───────────────────┬────────────────────┘   │
+  │                       │                        │
+  │   ┌───────────────────▼────────────────────┐   │
+  │   │      lib/stellar-helper.ts             │   │
+  │   │   (StellarWalletsKit + TTLCache)       │   │
+  │   └───────┬───────────────────┬────────────┘   │
+  └───────────┼───────────────────┼───────────────-┘
               │                   │
               ▼                   ▼
-  ┌─────────────────┐   ┌──────────────────────┐
-  │  Soroban RPC    │   │  Horizon API         │
-  │  (testnet)      │   │  (testnet)           │
-  │  soroban-testnet│   │  horizon-testnet     │
-  │  .stellar.org   │   │  .stellar.org        │
-  └────────┬────────┘   └──────────┬───────────┘
+  ┌─────────────────┐   ┌──────────────────┐
+  │  Soroban RPC    │   │  Horizon API     │
+  │  (testnet)      │   │  (testnet)       │
+  │  soroban-testnet│   │  horizon-testnet │
+  │  .stellar.org   │   │  .stellar.org    │
+  └────────┬────────┘   └──────────┬───────┘
            │                       │
            └───────────┬───────────┘
                        │
                        ▼
-          ┌────────────────────────┐
-          │   stellar_fund         │
-          │   Soroban Contract     │
-          │   (Testnet)            │
-          │                        │
-          │  campaigns: Map        │
-          │  donations: Map        │
-          └────────────────────────┘
+          ┌─────────────────────┐
+          │   stellar_fund      │
+          │   Soroban Contract  │
+          │   (Testnet)         │
+          │                     │
+          │  campaigns: Map     │
+          │  donations: Map     │
+          └─────────────────────┘
 
 ## Data Flow Diagrams
 

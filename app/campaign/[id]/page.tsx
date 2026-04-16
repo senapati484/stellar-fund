@@ -276,7 +276,7 @@ export default function CampaignPage() {
                     disabled={campaign.withdrawn || campaign.raised === 0}
                     className="px-6 py-3"
                   >
-                    Withdraw {stellar.formatXLM(campaign.raised)} XLM
+                    Withdraw {campaign.raised.toFixed(2)} XLM
                   </Button>
                 )}
               </div>

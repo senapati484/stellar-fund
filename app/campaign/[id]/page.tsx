@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { DonationForm } from '@/components/DonationForm';
-import { CampaignStatusBadge, FundingProgressBar, SkeletonLoader, EmptyState, Button, ShareButton } from '@/components/ui';
+import { CampaignStatusBadge, FundingProgressBar, SkeletonLoader, EmptyState, Button, ShareButton, Alert } from '@/components/ui';
 import { Donation } from '@/lib/contract-client';
 import { useCampaigns } from '@/components/CampaignProvider';
 import { stellar } from '@/lib/stellar-helper';
@@ -16,6 +16,7 @@ export default function CampaignPage() {
   const id = params.id as string;
   const { publicKey, isConnected } = useWallet();
   const { getCampaign, campaigns, updateCampaign, getDonations, addDonation } = useCampaigns();
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   console.log('Campaign page - id:', id, 'campaigns:', campaigns);
 
@@ -45,12 +46,15 @@ export default function CampaignPage() {
   };
 
   const handleWithdraw = async () => {
-    if (!campaign) return;
+    if (!campaign || !publicKey) return;
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Mark campaign as withdrawn
+      updateCampaign(campaign.id, { withdrawn: true, active: false });
+      setAlert({ type: 'success', message: 'Funds withdrawn successfully!' });
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Failed to withdraw:', error);
+      setAlert({ type: 'error', message: 'Failed to withdraw funds. Please try again.' });
     }
   };
 
@@ -93,10 +97,18 @@ export default function CampaignPage() {
   const daysLeft = getDaysLeft();
 
   return (
-    <div className="min-h-full flex flex-col bg-background">
+    <div className="min-h-screen bg-background">
       <Navbar />
-
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-10">
+      {alert && (
+        <div className="fixed top-20 right-4 z-50">
+          <Alert
+            type={alert.type}
+            message={alert.message}
+            onClose={() => setAlert(null)}
+          />
+        </div>
+      )}
+      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 py-10">
         {/* Campaign Header */}
         <div className="mb-10">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
@@ -254,7 +266,7 @@ export default function CampaignPage() {
             <div className="claude-card p-5">
               <p className="text-textMuted text-xs uppercase tracking-wider mb-3">Share this campaign</p>
               <ShareButton
-                url={typeof window !== 'undefined' ? window.location.href : ''}
+                url={`${typeof window !== 'undefined' ? window.location.origin : 'https://stellar-fund.netlify.app'}/campaign/${id}`}
                 title={campaign.title}
               />
               <p className="text-textMuted text-xs mt-3">Help this campaign reach its goal</p>

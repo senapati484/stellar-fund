@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useWallet } from './WalletProvider';
 import { Alert, Button, LoadingSpinner } from './ui';
 import { FaHome, FaPlus, FaUser } from 'react-icons/fa';
+import { stellar } from '@/lib/stellar-helper';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -145,5 +146,3 @@ export function Navbar() {
     </>
   );
 }
-
-import { stellar } from '@/lib/stellar-helper';

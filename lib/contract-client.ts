@@ -83,7 +83,7 @@ class TTLCache<T> {
   }
 }
 
-class FundContractClient {
+export class FundContractClient {
   private contractId: string;
   private server: rpc.Server;
   private cache = new TTLCache<any>();

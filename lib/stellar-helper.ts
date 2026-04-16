@@ -1,4 +1,10 @@
 import { Horizon, TransactionBuilder, Operation, Asset, Memo, Networks } from "@stellar/stellar-sdk";
+import {
+  isConnected,
+  getAddress,
+  signTransaction,
+  requestAccess,
+} from "@stellar/freighter-api";
 
 export class WalletNotFoundError extends Error {
   name = "WalletNotFoundError";
@@ -78,18 +84,18 @@ class StellarHelper {
         throw new WalletNotFoundError("No wallet available in non-browser environment");
       }
 
-      const freighter = (window as any).freighter;
-      if (!freighter) {
+      const connected = await isConnected();
+      if (!connected) {
         throw new WalletNotFoundError("Freighter wallet not installed");
       }
 
-      const publicKey = await freighter.getPublicKey?.();
-      if (!publicKey) {
+      const { address } = await requestAccess();
+      if (!address) {
         throw new WalletNotFoundError("No public key returned from wallet");
       }
 
-      this.connectedPublicKey = publicKey;
-      return publicKey;
+      this.connectedPublicKey = address;
+      return address;
     } catch (error) {
       if (error instanceof WalletNotFoundError) {
         throw error;
@@ -116,20 +122,20 @@ class StellarHelper {
         throw new Error("No wallet available in non-browser environment");
       }
 
-      const freighter = (window as any).freighter;
-      if (!freighter) {
+      const connected = await isConnected();
+      if (!connected) {
         throw new Error("Freighter wallet not installed");
       }
 
-      const result = await freighter.signTransaction?.(params.xdr, {
-        network: params.network,
+      const result = await signTransaction(params.xdr, {
+        networkPassphrase: params.network,
       });
 
-      if (!result) {
-        throw new Error("Failed to sign transaction");
+      if (!result || result.error) {
+        throw new Error(result?.error?.message || "Failed to sign transaction");
       }
 
-      return { signedXdr: result };
+      return { signedXdr: result.signedTxXdr };
     } catch (error) {
       throw new Error(
         `Failed to sign transaction: ${error instanceof Error ? error.message : "Unknown error"}`

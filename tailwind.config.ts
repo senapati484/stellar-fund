@@ -39,16 +39,16 @@ const config: Config = {
       },
       keyframes: {
         'slide-up': {
-          from: { opacity: 0, transform: 'translateY(12px)' },
-          to: { opacity: 1, transform: 'none' },
+          from: { opacity: '0', transform: 'translateY(12px)' },
+          to: { opacity: '1', transform: 'none' },
         },
         'fade-in': {
-          from: { opacity: 0 },
-          to: { opacity: 1 },
+          from: { opacity: '0' },
+          to: { opacity: '1' },
         },
         'pulse-soft': {
-          '0%, 100%': { opacity: 1 },
-          '50%': { opacity: 0.6 },
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.6' },
         },
         'fill-bar': {
           from: { width: '0%' },

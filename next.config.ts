@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {},
   webpack: (config, { isServer }) => {
     // Force @stellar/stellar-sdk to use the Node.js build which includes Horizon.Server
     // This is needed because the SDK's browser build excludes Horizon API

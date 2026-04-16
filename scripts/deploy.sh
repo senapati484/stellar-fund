@@ -7,18 +7,25 @@ if ! command -v stellar &>/dev/null; then
   exit 1
 fi
 
-stellar keys generate --global deployer --network testnet 2>/dev/null || true
-DEPLOYER=$(stellar keys address deployer)
+# Check if deployer key already exists before generating (avoid re-prompting/wallet spawns)
+if stellar keys address deployer &>/dev/null; then
+  DEPLOYER=$(stellar keys address deployer)
+  echo "✓ Deployer key found: $DEPLOYER"
+else
+  echo "Generating new deployer key..."
+  stellar keys generate --global deployer --network testnet
+  DEPLOYER=$(stellar keys address deployer)
+fi
 echo "Deployer: $DEPLOYER"
 curl -s "https://friendbot.stellar.org?addr=$DEPLOYER" > /dev/null
 echo "✓ Funded via Friendbot"
 
-cargo build --target wasm32-unknown-unknown --release \
-  --manifest-path contracts/stellar_fund/Cargo.toml
+# Build with stellar CLI (includes wasm-opt optimization)
+stellar contract build --manifest-path contracts/stellar_fund/Cargo.toml --out-dir target
 echo "✓ Contract built"
 
 CONTRACT_ID=$(stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/stellar_fund.wasm \
+  --wasm target/stellar_fund.wasm \
   --source deployer --network testnet)
 echo "✓ Contract deployed: $CONTRACT_ID"
 

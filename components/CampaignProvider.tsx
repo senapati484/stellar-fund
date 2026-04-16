@@ -13,6 +13,7 @@ export interface Campaign {
   active: boolean;
   withdrawn: boolean;
   createdAt: number;
+  capDonationsAtGoal?: boolean;
 }
 
 export interface Donation {
@@ -107,6 +108,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       active: true,
       withdrawn: false,
       createdAt: Math.floor(Date.now() / 1000),
+      capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
     };
 
     console.log('New campaign being added:', newCampaign);

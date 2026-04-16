@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Campaign, TxProgress } from '@/lib/contract-client';
+import { Campaign as ContractCampaign, TxProgress } from '@/lib/contract-client';
+import { Campaign } from '@/components/CampaignProvider';
 import { stellar, WalletRejectedError, InsufficientBalanceError, ContractError, CampaignExpiredError } from '@/lib/stellar-helper';
 import { Input, TxProgressStepper, Alert, Button } from './ui';
 import { FaHeart } from 'react-icons/fa';
@@ -41,6 +42,8 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
       newErrors.amount = 'Please enter a valid amount';
     } else if (parseFloat(amount) > parseFloat(xlmBalance)) {
       newErrors.amount = 'Insufficient balance';
+    } else if (campaign.capDonationsAtGoal && campaign.raised + parseFloat(amount) > campaign.goal) {
+      newErrors.amount = `Campaign goal reached. Maximum donation: ${(campaign.goal - campaign.raised).toFixed(2)} XLM`;
     }
 
     setErrors(newErrors);
@@ -126,6 +129,7 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
   };
 
   const isExpired = campaign.deadline < Date.now() / 1000;
+  const isGoalReached = campaign.capDonationsAtGoal && campaign.raised >= campaign.goal;
 
   return (
     <div className="claude-card p-5 sm:p-6">
@@ -136,16 +140,16 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
         <h3 className="font-serif font-medium text-lg text-textMain">Support This Campaign</h3>
       </div>
 
-      {(isExpired || campaign.withdrawn) && (
+      {(isExpired || campaign.withdrawn || isGoalReached) && (
         <Alert
           type="warning"
           message="This campaign is no longer accepting donations."
-          hint={isExpired ? 'The campaign deadline has passed.' : 'The campaign has been completed.'}
+          hint={isExpired ? 'The campaign deadline has passed.' : campaign.withdrawn ? 'The campaign has been completed.' : 'The funding goal has been reached.'}
           onClose={() => setAlert(null)}
         />
       )}
 
-      {!isExpired && !campaign.withdrawn && (
+      {!isExpired && !campaign.withdrawn && !isGoalReached && (
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>

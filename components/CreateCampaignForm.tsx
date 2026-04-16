@@ -19,6 +19,7 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
   const [description, setDescription] = useState('');
   const [goalXlm, setGoalXlm] = useState('10');
   const [durationDays, setDurationDays] = useState('30');
+  const [capDonationsAtGoal, setCapDonationsAtGoal] = useState(true);
   const [errors, setErrors] = useState<{
     title?: string;
     description?: string;
@@ -107,6 +108,7 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
         goal: goalValue,
         deadline,
         owner: publicKey,
+        capDonationsAtGoal,
       });
 
       console.log('Campaign added with ID:', campaignId);
@@ -249,6 +251,19 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
               ))}
             </div>
             {errors.durationDays && <p className="text-error text-xs mt-1">{errors.durationDays}</p>}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="capDonations"
+              checked={capDonationsAtGoal}
+              onChange={(e) => setCapDonationsAtGoal(e.target.checked)}
+              className="w-4 h-4 rounded border-borderInner text-primary focus:ring-primary"
+            />
+            <label htmlFor="capDonations" className="text-sm text-textMain">
+              Cap donations at goal amount (stop accepting donations once goal is reached)
+            </label>
           </div>
 
           <div className="flex gap-2">

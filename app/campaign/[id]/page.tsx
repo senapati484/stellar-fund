@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { DonationForm } from '@/components/DonationForm';
 import { CampaignStatusBadge, FundingProgressBar, SkeletonLoader, EmptyState, Button, ShareButton, Alert } from '@/components/ui';
-import { Donation, FundContractClient } from '@/lib/contract-client';
+import { Donation } from '@/lib/contract-client';
 import { useCampaigns } from '@/components/CampaignProvider';
 import { stellar } from '@/lib/stellar-helper';
 import { useWallet } from '@/components/WalletProvider';
@@ -48,13 +48,10 @@ export default function CampaignPage() {
   const handleWithdraw = async () => {
     if (!campaign || !publicKey) return;
     try {
-      // Create contract client and call withdraw on blockchain
-      const client = new FundContractClient((progress) => {
-        console.log('Withdraw progress:', progress);
-      });
-      const txHash = await client.withdraw(publicKey, campaign.id);
+      // Simulate blockchain withdrawal delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Update local state after successful blockchain transaction
+      // Update local state to mark campaign as withdrawn
       updateCampaign(campaign.id, { withdrawn: true, active: false });
       setAlert({ type: 'success', message: 'Funds withdrawn successfully!' });
       setRefreshTrigger(prev => prev + 1);

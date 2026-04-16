@@ -44,6 +44,7 @@ export interface Campaign {
   withdrawn: boolean;
   active: boolean;
   createdAt: number;
+  capDonationsAtGoal?: boolean;
 }
 
 export interface Donation {

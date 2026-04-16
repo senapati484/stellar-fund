@@ -17,8 +17,8 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [goalXlm, setGoalXlm] = useState('');
-  const [durationDays, setDurationDays] = useState('');
+  const [goalXlm, setGoalXlm] = useState('10');
+  const [durationDays, setDurationDays] = useState('30');
   const [errors, setErrors] = useState<{
     title?: string;
     description?: string;
@@ -98,10 +98,13 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
       const duration = parseInt(durationDays);
       const deadline = Math.floor(Date.now() / 1000) + (duration * 24 * 60 * 60);
 
+      const goalValue = parseFloat(goalXlm);
+      console.log('Goal value being saved:', goalValue, 'from string:', goalXlm);
+
       const campaignId = addCampaign({
         title,
         description,
-        goal: parseFloat(goalXlm),
+        goal: goalValue,
         deadline,
         owner: publicKey,
       });
@@ -219,7 +222,7 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
             label="Funding Goal (XLM)"
             value={goalXlm}
             onChange={setGoalXlm}
-            placeholder="100"
+            placeholder="10"
             type="number"
             min="1"
             error={errors.goalXlm}
@@ -238,7 +241,7 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
                   className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
                     durationDays === days
                       ? 'bg-primary text-white shadow-md ring-2 ring-primary ring-offset-2 ring-offset-surface'
-                      : 'bg-surface border-2 border-borderInner text-textMain hover:border-primary hover:shadow-sm'
+                      : 'bg-surface border border-borderInner text-textMain hover:border-primary hover:shadow-sm'
                   }`}
                 >
                   {days} days
@@ -263,7 +266,7 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
         <div className="space-y-4 animate-slide-up">
           <h3 className="font-serif font-medium text-lg text-textMain mb-4">Review & Submit</h3>
 
-          <div className="bg-[#F4F2EC] border border-[#E9E7E0] rounded-xl p-5 space-y-3">
+          <div className="bg-[#F5F5F5] border border-[#E5E5E5] rounded-xl p-5 space-y-3">
             <div className="flex justify-between">
               <span className="text-textMuted text-sm">Campaign Title</span>
               <span className="text-textMain text-sm font-medium">{title}</span>

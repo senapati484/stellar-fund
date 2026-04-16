@@ -9,9 +9,10 @@ interface CampaignCardProps {
   campaign: Campaign;
   onClick: () => void;
   compact?: boolean;
+  donorCount?: number;
 }
 
-export function CampaignCard({ campaign, onClick, compact = false }: CampaignCardProps) {
+export function CampaignCard({ campaign, onClick, compact = false, donorCount = 0 }: CampaignCardProps) {
   const daysLeft = Math.max(0, Math.ceil((campaign.deadline - Date.now() / 1000) / 86400));
   const progressPercent = Math.min(100, Math.round((campaign.raised / campaign.goal) * 100));
 
@@ -28,7 +29,7 @@ export function CampaignCard({ campaign, onClick, compact = false }: CampaignCar
             </h3>
           </div>
           <div className="flex items-center gap-2">
-            <div className="bg-fundLight text-fundGreen text-xs font-medium px-2 py-1 rounded-full">
+            <div className="bg-[#ECFDF5] text-[#059669] text-xs font-medium px-2 py-1 rounded-full">
               {progressPercent}%
             </div>
             <CampaignStatusBadge
@@ -76,7 +77,7 @@ export function CampaignCard({ campaign, onClick, compact = false }: CampaignCar
         </div>
         <div className="flex items-center gap-1.5">
           <FaHeart className="w-3 h-3" />
-          <span>— donors</span>
+          <span>{donorCount} donor{donorCount !== 1 ? 's' : ''}</span>
         </div>
         <div
           className={`flex items-center gap-1.5 ${

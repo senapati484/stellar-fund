@@ -44,7 +44,13 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
   const checkWalletStatus = async () => {
     if (typeof window === 'undefined') return;
-    
+
+    // Check if user manually disconnected
+    const manuallyDisconnected = localStorage.getItem('sf_wallet_manually_disconnected');
+    if (manuallyDisconnected === 'true') {
+      return;
+    }
+
     try {
       const connected = await isConnected();
       if (connected) {
@@ -68,6 +74,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
     try {
       const key = await stellar.connectWallet();
+      localStorage.removeItem('sf_wallet_manually_disconnected');
       setState({
         publicKey: key,
         isConnected: true,
@@ -75,7 +82,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
       });
     } catch (err) {
       setState(prev => ({ ...prev, isConnecting: false }));
-      
+
       if (err instanceof WalletNotFoundError) {
         setError('No wallet found. Install Freighter.');
       } else if (err instanceof WalletRejectedError) {
@@ -89,6 +96,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
   const disconnect = async () => {
     stellar.disconnect();
+    localStorage.setItem('sf_wallet_manually_disconnected', 'true');
     setState({
       publicKey: '',
       isConnected: false,

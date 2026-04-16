@@ -21,7 +21,7 @@ export default function CreatePage() {
       <main className="max-w-[640px] mx-auto px-4 sm:px-6 py-10">
         {!isConnected ? (
           <div className="claude-card text-center py-16 px-6">
-            <div className="w-16 h-16 rounded-full bg-[#F4F2EC] flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-[#F5F5F5] flex items-center justify-center mx-auto mb-4">
               <FaPlus className="text-primary w-8 h-8" />
             </div>
             <h2 className="font-serif text-2xl font-medium text-textMain mb-2">

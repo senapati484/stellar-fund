@@ -12,7 +12,7 @@ import { useWallet } from '@/components/WalletProvider';
 export default function Home() {
   const router = useRouter();
   const { publicKey, isConnected } = useWallet();
-  const { campaigns } = useCampaigns();
+  const { campaigns, getDonations } = useCampaigns();
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -30,10 +30,17 @@ export default function Home() {
     return true;
   });
 
+  // Calculate donor counts for each campaign
+  const campaignDonorCounts = filteredCampaigns.reduce((acc, campaign) => {
+    const donations = getDonations(campaign.id);
+    acc[campaign.id] = donations.length;
+    return acc;
+  }, {} as Record<number, number>);
+
   const stats = {
     activeCampaigns: campaigns.filter(c => c.active).length,
     totalRaised: campaigns.reduce((sum, c) => sum + c.raised, 0),
-    totalDonors: 0,
+    totalDonors: filteredCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[c.id] || 0), 0),
   };
 
   return (
@@ -49,7 +56,7 @@ export default function Home() {
             <p className="text-textMuted text-base mb-8">
               Fund ideas. Support builders. On Stellar testnet.
             </p>
-            <Button onClick={() => {}} variant="primary" className="px-8 py-3">
+            <Button onClick={() => {}} variant="primary" className="px-6 py-3">
               Connect Wallet
             </Button>
             <p className="text-xs text-textMuted mt-4">
@@ -60,15 +67,15 @@ export default function Home() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 animate-slide-up stagger-2">
-          <div className="bg-surface border border-borderInner rounded-xl p-5">
+          <div className="bg-surface border border-borderInner rounded-lg p-5">
             <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Active Campaigns</p>
             <p className="text-2xl font-semibold text-textMain">{stats.activeCampaigns}</p>
           </div>
-          <div className="bg-surface border border-borderInner rounded-xl p-5">
+          <div className="bg-surface border border-borderInner rounded-lg p-5">
             <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Total Raised (XLM)</p>
-            <p className="text-2xl font-semibold text-textMain">{stats.totalRaised}</p>
+            <p className="text-2xl font-semibold text-textMain">{stats.totalRaised.toFixed(2)}</p>
           </div>
-          <div className="bg-surface border border-borderInner rounded-xl p-5">
+          <div className="bg-surface border border-borderInner rounded-lg p-5">
             <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Total Donors</p>
             <p className="text-2xl font-semibold text-textMain">{stats.totalDonors}</p>
           </div>
@@ -83,7 +90,7 @@ export default function Home() {
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 filter === filterOption
                   ? 'bg-primary text-white shadow-md'
-                  : 'bg-surface border-2 border-borderInner text-textMuted hover:border-primary hover:shadow-sm'
+                  : 'bg-surface border border-borderInner text-textMuted hover:border-primary hover:shadow-sm'
               }`}
             >
               {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
@@ -115,6 +122,7 @@ export default function Home() {
               <CampaignCard
                 key={campaign.id}
                 campaign={campaign}
+                donorCount={campaignDonorCounts[campaign.id] || 0}
                 onClick={() => router.push(`/campaign/${campaign.id}`)}
               />
             ))}

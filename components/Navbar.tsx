@@ -54,10 +54,10 @@ export function Navbar() {
               <button
                 key={link.name}
                 onClick={() => router.push(link.path)}
-                className={`text-sm font-medium transition-colors ${
+                className={`text-sm font-medium transition-colors px-1 py-1 ${
                   isActive
-                    ? 'text-textMain border-b-2 border-primary pb-1'
-                    : 'text-textMuted hover:text-textMain pb-1'
+                    ? 'text-textMain border-b-2 border-primary'
+                    : 'text-textMuted hover:text-textMain'
                 }`}
               >
                 {link.name}
@@ -75,12 +75,12 @@ export function Navbar() {
                   {stellar.formatAddress(publicKey, 4, 4)}
                 </span>
               </div>
-              <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-3 py-1.5">
+              <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-4 py-2">
                 Disconnect
               </Button>
             </div>
           ) : (
-            <Button onClick={handleConnect} variant="primary" loading={isConnecting}>
+            <Button onClick={handleConnect} variant="primary" loading={isConnecting} className="px-4 py-2">
               {isConnecting ? 'Connecting...' : 'Connect Wallet'}
             </Button>
           )}
@@ -101,11 +101,11 @@ export function Navbar() {
 
           {/* Connect Button */}
           {isConnected ? (
-            <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-3 py-1.5">
+            <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-4 py-2">
               {stellar.formatAddress(publicKey, 3, 3)}
             </Button>
           ) : (
-            <Button onClick={handleConnect} variant="primary" className="text-xs px-3 py-1.5" loading={isConnecting}>
+            <Button onClick={handleConnect} variant="primary" className="text-xs px-4 py-2" loading={isConnecting}>
               {isConnecting ? <LoadingSpinner size="sm" color="white" /> : 'Connect'}
             </Button>
           )}

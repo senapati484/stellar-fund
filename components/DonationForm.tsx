@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Campaign, TxProgress } from '@/lib/contract-client';
 import { stellar, WalletRejectedError, InsufficientBalanceError, ContractError, CampaignExpiredError } from '@/lib/stellar-helper';
 import { Input, TxProgressStepper, Alert, Button } from './ui';
@@ -10,9 +10,10 @@ interface DonationFormProps {
   campaign: Campaign;
   publicKey: string;
   onSuccess: () => void;
+  onDonate?: (amount: number, message: string) => void;
 }
 
-export function DonationForm({ campaign, publicKey, onSuccess }: DonationFormProps) {
+export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: DonationFormProps) {
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState<{ amount?: string; message?: string }>({});
@@ -29,9 +30,9 @@ export function DonationForm({ campaign, publicKey, onSuccess }: DonationFormPro
     }
   };
 
-  useState(() => {
+  useEffect(() => {
     fetchBalance();
-  });
+  }, [publicKey]);
 
   const validate = () => {
     const newErrors: { amount?: string; message?: string } = {};
@@ -86,6 +87,10 @@ export function DonationForm({ campaign, publicKey, onSuccess }: DonationFormPro
         hint: 'Your donation has been recorded on-chain.',
       });
 
+      if (onDonate) {
+        onDonate(amountXlm, message);
+      }
+
       onSuccess();
     } catch (error) {
       if (error instanceof WalletRejectedError) {
@@ -125,7 +130,7 @@ export function DonationForm({ campaign, publicKey, onSuccess }: DonationFormPro
   return (
     <div className="claude-card p-5 sm:p-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full bg-[#F4F2EC] flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
           <FaHeart className="text-primary w-5 h-5" />
         </div>
         <h3 className="font-serif font-medium text-lg text-textMain">Support This Campaign</h3>
@@ -166,7 +171,11 @@ export function DonationForm({ campaign, publicKey, onSuccess }: DonationFormPro
                     key={preset}
                     type="button"
                     onClick={() => setAmount(preset)}
-                    className="bg-surface border border-borderInner rounded-lg px-3 py-1.5 text-xs font-medium cursor-pointer hover:border-primary transition-colors"
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
+                      amount === preset
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-surface text-textMain border-borderInner hover:border-primary'
+                    }`}
                   >
                     {preset} XLM
                   </button>
@@ -213,7 +222,7 @@ export function DonationForm({ campaign, publicKey, onSuccess }: DonationFormPro
         </form>
       )}
 
-      <div className="bg-[#F4F2EC] border border-borderInner rounded-lg p-3 text-xs text-textMuted mt-4">
+      <div className="bg-[#F5F5F5] border border-borderInner rounded-lg p-3 text-xs text-textMuted mt-4">
         Donations are sent directly to the campaign creator's wallet on Stellar testnet.
       </div>
     </div>

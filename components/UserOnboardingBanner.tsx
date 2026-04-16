@@ -39,44 +39,39 @@ export function UserOnboardingBanner({ publicKey, onDismiss }: UserOnboardingBan
   if (dismissed) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 md:bottom-auto md:top-16 animate-slide-up">
-      <div className="bg-[#24211D] text-white rounded-t-2xl p-5 sm:p-6 border-t-2 border-primary shadow-2xl">
+    <div className="fixed bottom-4 right-4 z-40 max-w-sm animate-slide-up">
+      <div className="bg-[#333333] text-white rounded-lg p-4 border border-borderOuter shadow-lg">
         <div className="flex items-start justify-between mb-2">
-          <h3 className="font-serif text-lg">👋 Welcome to StellarFund!</h3>
+          <h3 className="font-serif text-sm font-medium">👋 Welcome!</h3>
           <button
             onClick={handleClose}
-            className="text-white/60 hover:text-white text-xl leading-none"
+            className="text-white/60 hover:text-white text-sm leading-none ml-2"
           >
             ✕
           </button>
         </div>
 
-        <p className="text-sm text-white/80 leading-relaxed mt-2 mb-4">
-          You've connected your Stellar testnet wallet. Before you start, we'd love to know who you are so we can make StellarFund better.
+        <p className="text-xs text-white/80 leading-relaxed mb-3">
+          Help us improve StellarFund by sharing your feedback.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="flex gap-2 mb-3">
           <button
             onClick={handlePrimaryClick}
-            className="bg-primary text-white rounded-lg px-5 py-2.5 text-sm font-medium w-full sm:auto"
+            className="bg-primary text-white rounded px-3 py-1.5 text-xs font-medium flex-1"
           >
-            📝 Share Feedback & Register
+            Share Feedback
           </button>
           <button
             onClick={handleSecondaryClick}
-            className="text-white/60 hover:text-white text-sm w-full sm:auto"
+            className="text-white/60 hover:text-white text-xs px-2"
           >
-            Maybe later
+            Later
           </button>
         </div>
 
-        <p className="text-xs text-white/50 mb-2">
-          Takes 30 seconds. Your wallet address is:{' '}
-          <span className="font-mono">{stellar.formatAddress(publicKey, 6, 4)}</span>
-        </p>
-
-        <p className="text-white/40 text-xs">
-          Your data is stored in Google Sheets and only used for this bootcamp.
+        <p className="text-[10px] text-white/40">
+          Takes 30 seconds • Data stored in Google Sheets
         </p>
       </div>
     </div>

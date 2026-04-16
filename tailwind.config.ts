@@ -9,18 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#F3EFEC',
-        surface: '#FAF9F7',
-        primary: '#C96442',
-        textMain: '#24211D',
-        textMuted: '#7A7570',
-        borderInner: '#E8E5E0',
-        borderOuter: '#D4D0CA',
-        accent: '#C96442',
-        success: '#2F593F',
-        error: '#8C2F2B',
-        fundGreen: '#059669',
-        fundLight: '#ECFDF5',
+        background: '#F8F8F8',
+        surface: '#FFFFFF',
+        primary: '#D97450',
+        textMain: '#333333',
+        textMuted: '#666666',
+        borderInner: '#E5E5E5',
+        borderOuter: '#D4D4D4',
+        accent: '#D97450',
+        success: '#059669',
+        error: '#DC2626',
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'sans-serif'],

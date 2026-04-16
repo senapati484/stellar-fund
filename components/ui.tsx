@@ -1,27 +1,30 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { stellar } from '@/lib/stellar-helper';
-import { FaShare } from 'react-icons/fa';
-import { TxProgress } from '@/lib/contract-client';
+import { useState, useEffect } from "react";
+import { stellar } from "@/lib/stellar-helper";
+import { FaShare, FaCheck, FaTimes } from "react-icons/fa";
+import { TxProgress } from "@/lib/contract-client";
 
-// LoadingSpinner
+/* ==================== Loading Spinner ==================== */
 interface LoadingSpinnerProps {
-  size?: 'sm' | 'md' | 'lg';
-  color?: 'primary' | 'white' | 'muted';
+  size?: "sm" | "md" | "lg";
+  color?: "primary" | "white" | "muted";
 }
 
-export function LoadingSpinner({ size = 'md', color = 'primary' }: LoadingSpinnerProps) {
+export function LoadingSpinner({
+  size = "md",
+  color = "primary",
+}: LoadingSpinnerProps) {
   const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-6 h-6',
-    lg: 'w-8 h-8',
+    sm: "w-4 h-4",
+    md: "w-6 h-6",
+    lg: "w-8 h-8",
   };
 
   const colorClasses = {
-    primary: 'border-primary',
-    white: 'border-white',
-    muted: 'border-textMuted',
+    primary: "border-primary",
+    white: "border-white",
+    muted: "border-textMuted",
   };
 
   return (
@@ -33,7 +36,7 @@ export function LoadingSpinner({ size = 'md', color = 'primary' }: LoadingSpinne
   );
 }
 
-// SkeletonLoader
+/* ==================== Skeleton Loader ==================== */
 interface SkeletonLoaderProps {
   count?: number;
   height?: string;
@@ -41,25 +44,38 @@ interface SkeletonLoaderProps {
   rounded?: string;
 }
 
-export function SkeletonLoader({ count = 1, height = 'h-4', width = 'w-full', rounded = 'rounded' }: SkeletonLoaderProps) {
+export function SkeletonLoader({
+  count = 1,
+  height = "h-4",
+  width = "w-full",
+  rounded = "rounded-lg",
+}: SkeletonLoaderProps) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className={`animate-pulse bg-borderInner ${height} ${width} ${rounded}`} />
+        <div
+          key={i}
+          className={`animate-pulse bg-gradient-to-r from-borderInner to-borderInner/50 ${height} ${width} ${rounded}`}
+        />
       ))}
     </div>
   );
 }
 
-// FundingProgressBar
+/* ==================== Funding Progress Bar ==================== */
 interface FundingProgressBarProps {
   raised: number;
   goal: number;
   animated?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
 }
 
-export function FundingProgressBar({ raised, goal, animated = false, size = 'md' }: FundingProgressBarProps) {
+export function FundingProgressBar({
+  raised,
+  goal,
+  animated = false,
+  size = "md",
+}: FundingProgressBarProps) {
   const percent = Math.min(100, Math.round((raised / goal) * 100));
   const [mounted, setMounted] = useState(false);
 
@@ -70,93 +86,111 @@ export function FundingProgressBar({ raised, goal, animated = false, size = 'md'
   }, [animated]);
 
   const sizeClasses = {
-    sm: 'h-1.5',
-    md: 'h-2.5',
-    lg: 'h-4',
+    sm: "h-1.5",
+    md: "h-2.5",
+    lg: "h-4",
   };
 
-  const showLabels = size === 'md' || size === 'lg';
+  const showLabels = size === "md" || size === "lg";
 
   return (
-    <div className="w-full">
-      <div className={`relative w-full bg-borderInner rounded-full overflow-hidden ${sizeClasses[size]}`}>
+    <div className="w-full space-y-2">
+      <div
+        className={`relative w-full bg-borderInner rounded-full overflow-hidden ${sizeClasses[size]}`}
+      >
         <div
-          className="bg-fundGreen rounded-full h-full transition-all duration-1000 ease-out"
+          className="bg-gradient-to-r from-success to-emerald-500 rounded-full h-full transition-all duration-1000 ease-out"
           style={{
-            width: animated ? (mounted ? `${percent}%` : '0%') : `${percent}%`,
+            width: animated ? (mounted ? `${percent}%` : "0%") : `${percent}%`,
           }}
         />
       </div>
       {showLabels && (
-        <div className="flex justify-between mt-2">
-          <span className="text-fundGreen font-medium text-xs">
-            {stellar.formatXLM(raised)} XLM raised
+        <div className="flex justify-between items-center">
+          <span className="text-success font-semibold text-sm">
+            {raised.toFixed(2)} XLM raised
           </span>
-          <span className="text-textMuted text-xs">of {stellar.formatXLM(goal)} XLM goal</span>
+          <span className="text-textMuted text-sm">
+            of {goal.toFixed(2)} XLM goal
+          </span>
         </div>
       )}
       {percent >= 100 && (
-        <div className="mt-2 inline-flex items-center gap-1 bg-[#F2F8F4] text-[#2F593F] text-xs font-semibold px-2 py-1 rounded-md">
-          🎉 Goal reached!
+        <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-green-200">
+          <FaCheck className="w-3 h-3" />
+          Goal reached!
         </div>
       )}
     </div>
   );
 }
 
-// CampaignStatusBadge
+/* ==================== Campaign Status Badge ==================== */
 interface CampaignStatusBadgeProps {
   active: boolean;
   withdrawn: boolean;
   daysLeft: number;
 }
 
-export function CampaignStatusBadge({ active, withdrawn, daysLeft }: CampaignStatusBadgeProps) {
+export function CampaignStatusBadge({
+  active,
+  withdrawn,
+  daysLeft,
+}: CampaignStatusBadgeProps) {
   let status: string;
-  let className: string;
+  let bgColor: string;
+  let textColor: string;
 
   if (withdrawn) {
-    status = 'Completed';
-    className = 'bg-borderInner text-textMuted';
+    status = "Completed";
+    bgColor = "bg-gray-100";
+    textColor = "text-gray-600";
   } else if (!active) {
-    status = 'Expired';
-    className = 'bg-[#FEF3C7] text-[#7C4A00]';
+    status = "Expired";
+    bgColor = "bg-amber-50";
+    textColor = "text-amber-700";
   } else if (daysLeft <= 3) {
-    status = 'Ending Soon';
-    className = 'bg-[#FEF3C7] text-[#7C4A00]';
+    status = "Ending Soon";
+    bgColor = "bg-orange-50";
+    textColor = "text-orange-700";
   } else {
-    status = 'Active';
-    className = 'bg-[#F2F8F4] text-[#2F593F]';
+    status = "Active";
+    bgColor = "bg-green-50";
+    textColor = "text-green-700";
   }
 
   return (
-    <span className={`${className} text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md`}>
+    <span
+      className={`${bgColor} ${textColor} text-xs font-semibold uppercase tracking-widest px-3 py-1.5 rounded-lg border ${textColor === "text-gray-600" ? "border-gray-200" : "border-current/20"}`}
+    >
       {status}
     </span>
   );
 }
 
-// TxProgressStepper
+/* ==================== Transaction Progress Stepper ==================== */
 interface TxProgressStepperProps {
   progress: TxProgress;
 }
 
 export function TxProgressStepper({ progress }: TxProgressStepperProps) {
-  const steps = ['Building', 'Signing', 'Submitting', 'Confirming'];
-  const currentStepIndex = steps.findIndex(step => progress.stage.toLowerCase().includes(step.toLowerCase()));
+  const steps = ["Building", "Signing", "Submitting", "Confirming"];
+  const currentStepIndex = steps.findIndex((step) =>
+    progress.stage.toLowerCase().includes(step.toLowerCase()),
+  );
 
   const getStepStatus = (index: number) => {
-    if (progress.stage === 'success') return 'completed';
-    if (progress.stage === 'error') return 'error';
-    if (index < currentStepIndex) return 'completed';
-    if (index === currentStepIndex) return 'active';
-    return 'pending';
+    if (progress.stage === "success") return "completed";
+    if (progress.stage === "error") return "error";
+    if (index < currentStepIndex) return "completed";
+    if (index === currentStepIndex) return "active";
+    return "pending";
   };
 
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    if (progress.stage === 'success') {
+    if (progress.stage === "success") {
       await navigator.clipboard.writeText(progress.hash);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -164,112 +198,168 @@ export function TxProgressStepper({ progress }: TxProgressStepperProps) {
   };
 
   return (
-    <div className="animate-slide-up">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mb-4">
+    <div className="space-y-4 animate-slide-up">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {steps.map((step, index) => (
-          <div key={step} className="flex items-center gap-2">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                getStepStatus(index) === 'completed'
-                  ? 'bg-fundGreen'
-                  : getStepStatus(index) === 'active'
-                  ? 'bg-primary animate-pulse-soft'
-                  : getStepStatus(index) === 'error'
-                  ? 'bg-error'
-                  : 'bg-borderInner'
-              }`}
-            />
+          <div key={step} className="flex items-center gap-3">
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs transition-all duration-300 ${
+                  getStepStatus(index) === "completed"
+                    ? "bg-success text-white"
+                    : getStepStatus(index) === "active"
+                      ? "bg-primary text-white animate-pulse-soft"
+                      : getStepStatus(index) === "error"
+                        ? "bg-error text-white"
+                        : "bg-borderInner text-textMuted"
+                }`}
+              >
+                {getStepStatus(index) === "completed" ? (
+                  <FaCheck className="w-3 h-3" />
+                ) : (
+                  index + 1
+                )}
+              </div>
+            </div>
             <span
-              className={`text-xs ${
-                getStepStatus(index) === 'completed'
-                  ? 'text-fundGreen'
-                  : getStepStatus(index) === 'active'
-                  ? 'text-primary font-medium'
-                  : getStepStatus(index) === 'error'
-                  ? 'text-error'
-                  : 'text-textMuted'
+              className={`text-sm font-medium ${
+                getStepStatus(index) === "completed"
+                  ? "text-success"
+                  : getStepStatus(index) === "active"
+                    ? "text-primary"
+                    : getStepStatus(index) === "error"
+                      ? "text-error"
+                      : "text-textMuted"
               }`}
             >
               {step}
             </span>
             {index < steps.length - 1 && (
-              <div className="hidden sm:block w-8 h-0.5 bg-borderInner" />
+              <div className="hidden sm:block flex-1 h-0.5 bg-borderInner mx-2" />
             )}
           </div>
         ))}
       </div>
 
-      {progress.stage === 'success' && (
-        <div className="bg-[#F2F8F4] border border-[#E2F0E7] rounded-lg p-3 sm:p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[#2F593F] font-medium text-sm">Transaction Confirmed</span>
-              <code className="bg-white/50 px-2 py-0.5 rounded text-[10px] text-[#2F593F] font-mono">
-                {progress.hash.slice(0, 12)}...
-              </code>
+      {progress.stage === "success" && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <FaCheck className="w-5 h-5 text-success flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-green-700">
+                Transaction Confirmed
+              </p>
+              <p className="text-xs text-green-600 mt-0.5">
+                Transaction hash: {progress.hash.slice(0, 20)}...
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleCopy}
-                className="text-[#2F593F] hover:text-fundGreen text-xs font-medium transition-colors"
-              >
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
-              <a
-                href={stellar.getExplorerLink(progress.hash, 'tx')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#2F593F] hover:text-fundGreen text-xs font-medium transition-colors"
-              >
-                View on Explorer
-              </a>
-            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button
+              onClick={handleCopy}
+              variant="secondary"
+              size="sm"
+              className="flex-1"
+            >
+              {copied ? "Copied!" : "Copy Hash"}
+            </Button>
+            <a
+              href={stellar.getExplorerLink(progress.hash, "tx")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1"
+            >
+              <Button variant="ghost" size="sm" className="w-full">
+                View on Explorer →
+              </Button>
+            </a>
           </div>
         </div>
       )}
 
-      {progress.stage === 'error' && (
-        <div className="bg-[#FCF2F2] border border-[#F8E3E3] rounded-lg p-3 sm:p-4">
-          <p className="text-[#8C2F2B] font-medium text-sm">{progress.message}</p>
-          <p className="text-[#8C2F2B]/70 text-xs mt-1">Type: {progress.errorType}</p>
+      {progress.stage === "error" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex gap-3">
+            <FaTimes className="w-5 h-5 text-error flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-error">{progress.message}</p>
+              <p className="text-xs text-error/70 mt-1">
+                Error Type: {progress.errorType}
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// Alert
+/* ==================== Alert Component ==================== */
 interface AlertProps {
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: "success" | "error" | "warning" | "info";
   message: string;
   hint?: string;
   onClose: () => void;
 }
 
 export function Alert({ type, message, hint, onClose }: AlertProps) {
-  const typeClasses = {
-    success: 'bg-[#F2F8F4] border-[#E2F0E7] text-[#2F593F]',
-    error: 'bg-[#FCF2F2] border-[#F8E3E3] text-[#8C2F2B]',
-    warning: 'bg-[#FEF3C7] border-[#FDE68A] text-[#7C4A00]',
-    info: 'bg-[#F4F2EC] border-[#E9E7E0] text-textMuted',
+  const typeConfig = {
+    success: {
+      bg: "bg-green-50",
+      border: "border-green-200",
+      text: "text-green-700",
+      icon: <FaCheck className="w-5 h-5" />,
+    },
+    error: {
+      bg: "bg-red-50",
+      border: "border-red-200",
+      text: "text-red-700",
+      icon: <FaTimes className="w-5 h-5" />,
+    },
+    warning: {
+      bg: "bg-amber-50",
+      border: "border-amber-200",
+      text: "text-amber-700",
+      icon: "⚠️",
+    },
+    info: {
+      bg: "bg-blue-50",
+      border: "border-blue-200",
+      text: "text-blue-700",
+      icon: "ℹ️",
+    },
   };
 
+  const config = typeConfig[type];
+
   return (
-    <div className={`${typeClasses[type]} border rounded-lg p-3 sm:p-4 animate-slide-up`}>
-      <div className="flex justify-between items-start gap-2">
-        <div>
-          <p className="font-medium text-sm">{message}</p>
-          {hint && <p className="text-xs mt-1 opacity-80">{hint}</p>}
+    <div
+      className={`${config.bg} border ${config.border} rounded-xl p-4 animate-slide-up`}
+    >
+      <div className="flex gap-3">
+        <div className={`${config.text} flex-shrink-0 mt-0.5`}>
+          {typeof config.icon === "string" ? (
+            <span>{config.icon}</span>
+          ) : (
+            config.icon
+          )}
         </div>
-        <button onClick={onClose} className="text-current opacity-60 hover:opacity-100 transition-opacity">
-          ✕
+        <div className="flex-1">
+          <p className={`font-semibold ${config.text}`}>{message}</p>
+          {hint && <p className={`text-sm ${config.text}/70 mt-1`}>{hint}</p>}
+        </div>
+        <button
+          onClick={onClose}
+          className={`${config.text} opacity-60 hover:opacity-100 transition-opacity flex-shrink-0`}
+        >
+          <FaTimes className="w-4 h-4" />
         </button>
       </div>
     </div>
   );
 }
 
-// Input
+/* ==================== Input Component ==================== */
 interface InputProps {
   label: string;
   value: string;
@@ -285,31 +375,44 @@ interface InputProps {
   maxLength?: number;
 }
 
-export function Input({ label, value, onChange, placeholder, error, type = 'text', disabled, hint, required, min, step, maxLength }: InputProps) {
+export function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  error,
+  type = "text",
+  disabled,
+  hint,
+  required,
+  min,
+  step,
+  maxLength,
+}: InputProps) {
   return (
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-textMain">
+    <div className="space-y-2">
+      <label className="block text-sm font-semibold text-textMain">
         {label}
         {required && <span className="text-error ml-1">*</span>}
       </label>
       <input
         type={type}
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         min={min}
         step={step}
         maxLength={maxLength}
-        className={`claude-input ${error ? 'border-error focus:border-error' : ''}`}
+        className={`claude-input transition-all ${error ? "border-error focus:border-error focus:ring-error" : ""}`}
       />
       {hint && !error && <p className="text-xs text-textMuted">{hint}</p>}
-      {error && <p className="text-xs text-error">{error}</p>}
+      {error && <p className="text-xs text-error font-medium">{error}</p>}
     </div>
   );
 }
 
-// Textarea
+/* ==================== Textarea Component ==================== */
 interface TextareaProps {
   label: string;
   value: string;
@@ -322,53 +425,86 @@ interface TextareaProps {
   required?: boolean;
 }
 
-export function Textarea({ label, value, onChange, placeholder, error, rows = 4, maxLength, hint, required }: TextareaProps) {
+export function Textarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+  error,
+  rows = 4,
+  maxLength,
+  hint,
+  required,
+}: TextareaProps) {
   return (
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-textMain">
+    <div className="space-y-2">
+      <label className="block text-sm font-semibold text-textMain">
         {label}
         {required && <span className="text-error ml-1">*</span>}
       </label>
       <textarea
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
         maxLength={maxLength}
-        className={`claude-textarea ${error ? 'border-error focus:border-error' : ''}`}
+        className={`claude-textarea transition-all ${error ? "border-error focus:border-error" : ""}`}
       />
-      <div className="flex justify-between">
+      <div className="flex justify-between items-end">
         {hint && !error && <p className="text-xs text-textMuted">{hint}</p>}
         {maxLength && (
-          <p className="text-xs text-textMuted ml-auto">
+          <p
+            className={`text-xs font-medium ${value.length > maxLength * 0.9 ? "text-error" : "text-textMuted"}`}
+          >
             {value.length}/{maxLength}
           </p>
         )}
       </div>
-      {error && <p className="text-xs text-error">{error}</p>}
+      {error && <p className="text-xs text-error font-medium">{error}</p>}
     </div>
   );
 }
 
-// Button
+/* ==================== Button Component ==================== */
 interface ButtonProps {
   children: React.ReactNode;
-  onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  onClick?: () => void | Promise<void>;
+  variant?: "primary" | "secondary" | "danger" | "success" | "ghost";
+  size?: "sm" | "md" | "lg" | "xl";
   disabled?: boolean;
   fullWidth?: boolean;
-  type?: 'button' | 'submit';
+  type?: "button" | "submit" | "reset";
   loading?: boolean;
   icon?: React.ReactNode;
   className?: string;
 }
 
-export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', loading, icon, className }: ButtonProps) {
-  const baseClasses = 'claude-button';
+export function Button({
+  children,
+  onClick,
+  variant = "primary",
+  size = "md",
+  disabled,
+  fullWidth,
+  type = "button",
+  loading,
+  icon,
+  className,
+}: ButtonProps) {
+  const baseClasses = "claude-button";
   const variantClasses = {
-    primary: 'claude-button-primary',
-    secondary: 'claude-button-secondary',
-    danger: 'bg-error text-white hover:bg-[#7A2A27] border border-transparent shadow-sm',
+    primary: "claude-button-primary",
+    secondary: "claude-button-secondary",
+    danger: "claude-button-danger",
+    success: "claude-button-success",
+    ghost: "claude-button-ghost",
+  };
+
+  const sizeClasses = {
+    sm: "size-sm",
+    md: "",
+    lg: "size-lg",
+    xl: "size-xl",
   };
 
   return (
@@ -376,21 +512,26 @@ export function Button({ children, onClick, variant = 'primary', disabled, fullW
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`${baseClasses} ${variantClasses[variant]} ${fullWidth ? 'w-full' : ''} ${loading ? 'cursor-wait' : ''} ${className || ''}`}
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${
+        fullWidth ? "w-full" : ""
+      } ${loading ? "cursor-wait" : "cursor-pointer"} ${className || ""}`}
     >
       {loading ? (
-        <LoadingSpinner size="sm" color="white" />
+        <LoadingSpinner
+          size="sm"
+          color={variant === "ghost" ? "muted" : "white"}
+        />
       ) : (
-        <div className="flex items-center justify-center gap-2">
-          {icon}
-          {children}
-        </div>
+        <>
+          {icon && <span className="flex-shrink-0">{icon}</span>}
+          <span className="flex-1">{children}</span>
+        </>
       )}
     </button>
   );
 }
 
-// Card
+/* ==================== Card Component ==================== */
 interface CardProps {
   title?: string;
   subtitle?: string;
@@ -398,29 +539,50 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   action?: React.ReactNode;
+  elevated?: boolean;
 }
 
-export function Card({ title, subtitle, icon, children, className, action }: CardProps) {
+export function Card({
+  title,
+  subtitle,
+  icon,
+  children,
+  className,
+  action,
+  elevated,
+}: CardProps) {
   return (
-    <div className={`claude-card p-5 sm:p-6 ${className || ''}`}>
+    <div
+      className={`${elevated ? "claude-card-elevated" : "claude-card"} p-6 ${className || ""}`}
+    >
       {(title || subtitle || icon || action) && (
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            {icon && <div className="text-primary">{icon}</div>}
+        <div className="flex items-start justify-between mb-5">
+          <div className="flex items-start gap-4">
+            {icon && (
+              <div className="text-primary text-2xl flex-shrink-0 mt-1">
+                {icon}
+              </div>
+            )}
             <div>
-              {title && <h3 className="font-semibold text-textMain">{title}</h3>}
-              {subtitle && <p className="text-sm text-textMuted mt-0.5">{subtitle}</p>}
+              {title && (
+                <h3 className="font-serif text-lg font-semibold text-textMain">
+                  {title}
+                </h3>
+              )}
+              {subtitle && (
+                <p className="text-sm text-textMuted mt-1">{subtitle}</p>
+              )}
             </div>
           </div>
-          {action && <div>{action}</div>}
+          {action && <div className="flex-shrink-0">{action}</div>}
         </div>
       )}
-      {children}
+      <div className={title || subtitle ? "mt-4" : ""}>{children}</div>
     </div>
   );
 }
 
-// EmptyState
+/* ==================== Empty State Component ==================== */
 interface EmptyStateProps {
   icon: string;
   title: string;
@@ -428,18 +590,27 @@ interface EmptyStateProps {
   action?: React.ReactNode;
 }
 
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-6 border-2 border-dashed border-borderInner rounded-xl">
-      <div className="text-4xl mb-4">{icon}</div>
-      <h3 className="font-semibold text-textMain text-lg mb-2">{title}</h3>
-      <p className="text-textMuted text-center text-sm mb-6 max-w-md">{description}</p>
-      {action}
+    <div className="flex flex-col items-center justify-center py-16 px-6 border-2 border-dashed border-borderInner rounded-2xl bg-gradient-to-b from-surface to-background/50">
+      <div className="text-5xl mb-4">{icon}</div>
+      <h3 className="font-serif text-xl font-semibold text-textMain mb-2 text-center">
+        {title}
+      </h3>
+      <p className="text-textMuted text-center text-sm mb-6 max-w-md leading-relaxed">
+        {description}
+      </p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
 
-// ShareButton
+/* ==================== Share Button Component ==================== */
 interface ShareButtonProps {
   url: string;
   title: string;
@@ -449,18 +620,118 @@ export function ShareButton({ url, title }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
   };
 
   return (
-    <button
+    <Button
       onClick={handleShare}
-      className="claude-button-secondary text-xs px-3 py-1.5"
+      variant="secondary"
+      size="sm"
+      icon={<FaShare className="w-3.5 h-3.5" />}
     >
-      <FaShare className="w-3 h-3" />
-      {copied ? 'Copied!' : 'Share'}
-    </button>
+      {copied ? "Copied!" : "Share"}
+    </Button>
+  );
+}
+
+/* ==================== Badge Component ==================== */
+interface BadgeProps {
+  children: React.ReactNode;
+  variant?: "default" | "success" | "error" | "warning" | "info";
+  size?: "sm" | "md";
+}
+
+export function Badge({
+  children,
+  variant = "default",
+  size = "md",
+}: BadgeProps) {
+  const variantStyles = {
+    default: "bg-borderInner text-textMain",
+    success: "bg-green-50 text-green-700 border border-green-200",
+    error: "bg-red-50 text-error border border-red-200",
+    warning: "bg-amber-50 text-amber-700 border border-amber-200",
+    info: "bg-blue-50 text-blue-700 border border-blue-200",
+  };
+
+  const sizeStyles = {
+    sm: "px-2 py-1 text-xs",
+    md: "px-3 py-1.5 text-sm",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full font-medium ${variantStyles[variant]} ${sizeStyles[size]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/* ==================== Divider Component ==================== */
+interface DividerProps {
+  variant?: "light" | "normal";
+  className?: string;
+}
+
+export function Divider({ variant = "normal", className }: DividerProps) {
+  return (
+    <div
+      className={`divider ${variant === "light" ? "divider-light" : ""} ${className || ""}`}
+    />
+  );
+}
+
+/* ==================== Stats Card Component ==================== */
+interface StatsCardProps {
+  label: string;
+  value: string | number;
+  unit?: string;
+  icon?: React.ReactNode;
+  trend?: "up" | "down" | "neutral";
+  trendValue?: string;
+}
+
+export function StatsCard({
+  label,
+  value,
+  unit,
+  icon,
+  trend,
+  trendValue,
+}: StatsCardProps) {
+  return (
+    <Card className="text-center">
+      {icon && <div className="text-3xl mb-3 text-center">{icon}</div>}
+      <p className="text-textMuted text-xs uppercase tracking-widest mb-2">
+        {label}
+      </p>
+      <div className="flex items-baseline justify-center gap-1">
+        <p className="text-3xl font-semibold text-textMain font-serif">
+          {value}
+        </p>
+        {unit && <span className="text-textMuted text-sm">{unit}</span>}
+      </div>
+      {trendValue && (
+        <p
+          className={`text-xs font-medium mt-2 ${
+            trend === "up"
+              ? "text-fundGreen"
+              : trend === "down"
+                ? "text-error"
+                : "text-textMuted"
+          }`}
+        >
+          {trend === "up" ? "↑" : trend === "down" ? "↓" : "→"} {trendValue}
+        </p>
+      )}
+    </Card>
   );
 }

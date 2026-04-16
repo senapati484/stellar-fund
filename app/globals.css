@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
 
 html,
 body {
@@ -26,11 +26,14 @@ body {
 
 @layer utilities {
   .claude-card {
-    @apply bg-surface border border-borderInner rounded-xl shadow-sm transition-all duration-200;
+    @apply border rounded-xl shadow-sm transition-all duration-200;
+    background-color: #FAF9F7;
+    border-color: #E8E5E0;
   }
 
   .claude-card:hover {
-    @apply border-borderOuter shadow-md;
+    @apply shadow-md;
+    border-color: #D4D0CA;
   }
 
   .claude-button {
@@ -38,19 +41,53 @@ body {
   }
 
   .claude-button-primary {
-    @apply bg-primary text-white hover:bg-textMain border border-transparent shadow-sm;
+    @apply text-white border border-transparent shadow-sm hover:opacity-90;
+    background-color: #C96442;
   }
 
   .claude-button-secondary {
-    @apply bg-surface text-textMain border border-borderOuter hover:bg-[#F0EEEB] shadow-sm;
+    @apply border shadow-sm;
+    background-color: #FAF9F7;
+    color: #24211D;
+    border-color: #D4D0CA;
+  }
+
+  .claude-button-secondary:hover {
+    background-color: #F0EEEB;
   }
 
   .claude-input {
-    @apply w-full bg-surface border border-borderInner rounded-lg px-4 py-2 text-textMain placeholder-textMuted/60 transition-all duration-200 focus:outline-none focus:border-borderOuter focus:shadow-[0_0_0_2px_rgba(201,100,66,0.1)];
+    @apply w-full border rounded-lg px-4 py-2 transition-all duration-200 focus:outline-none;
+    background-color: #FAF9F7;
+    border-color: #E8E5E0;
+    color: #24211D;
+  }
+
+  .claude-input::placeholder {
+    color: #7A7570;
+    opacity: 0.6;
+  }
+
+  .claude-input:focus {
+    border-color: #D4D0CA;
+    box-shadow: 0 0 0 2px rgba(201, 100, 66, 0.1);
   }
 
   .claude-textarea {
-    @apply claude-input resize-none;
+    @apply w-full border rounded-lg px-4 py-2 transition-all duration-200 focus:outline-none resize-none;
+    background-color: #FAF9F7;
+    border-color: #E8E5E0;
+    color: #24211D;
+  }
+
+  .claude-textarea::placeholder {
+    color: #7A7570;
+    opacity: 0.6;
+  }
+
+  .claude-textarea:focus {
+    border-color: #D4D0CA;
+    box-shadow: 0 0 0 2px rgba(201, 100, 66, 0.1);
   }
 
   .animate-slide-up {

@@ -1,27 +1,27 @@
-import { Horizon, Server, StellarWalletsKit } from '@stellar/stellar-sdk';
+import { Horizon, TransactionBuilder, Operation, Asset, Memo, Networks } from "@stellar/stellar-sdk";
 
 export class WalletNotFoundError extends Error {
-  name = 'WalletNotFoundError';
+  name = "WalletNotFoundError";
 }
 
 export class WalletRejectedError extends Error {
-  name = 'WalletRejectedError';
+  name = "WalletRejectedError";
 }
 
 export class InsufficientBalanceError extends Error {
-  name = 'InsufficientBalanceError';
+  name = "InsufficientBalanceError";
 }
 
 export class DestinationUnfundedError extends Error {
-  name = 'DestinationUnfundedError';
+  name = "DestinationUnfundedError";
 }
 
 export class ContractError extends Error {
-  name = 'ContractError';
+  name = "ContractError";
 }
 
 export class CampaignExpiredError extends Error {
-  name = 'CampaignExpiredError';
+  name = "CampaignExpiredError";
 }
 
 class TTLCache<T> {
@@ -54,48 +54,95 @@ class TTLCache<T> {
 }
 
 class StellarHelper {
-  private server: Server;
-  private walletKit: StellarWalletsKit;
+  private server: Horizon.Server;
   private networkPassphrase: string;
   private cache = new TTLCache<any>();
+  private connectedPublicKey: string | null = null;
 
-  constructor(network: 'testnet' | 'mainnet' = 'testnet') {
-    this.networkPassphrase = network === 'testnet'
-      ? 'Test SDF Network ; September 2015'
-      : 'Public Global Stellar Network ; September 2015';
-    
-    this.server = new Server(network === 'testnet'
-      ? 'https://horizon-testnet.stellar.org'
-      : 'https://horizon.stellar.org');
-    
-    this.walletKit = new StellarWalletsKit({
-      allowAllModules: true,
-    });
+  constructor(network: "testnet" | "mainnet" = "testnet") {
+    this.networkPassphrase =
+      network === "testnet"
+        ? "Test SDF Network ; September 2015"
+        : "Public Global Stellar Network ; September 2015";
+
+    this.server = new Horizon.Server(
+      network === "testnet"
+        ? "https://horizon-testnet.stellar.org"
+        : "https://horizon.stellar.org"
+    );
   }
 
   async connectWallet(): Promise<string> {
     try {
-      const { publicKey } = await this.walletKit.connect();
-      if (!publicKey) {
-        throw new WalletNotFoundError('No public key returned from wallet');
+      if (typeof window === "undefined") {
+        throw new WalletNotFoundError("No wallet available in non-browser environment");
       }
+
+      const freighter = (window as any).freighter;
+      if (!freighter) {
+        throw new WalletNotFoundError("Freighter wallet not installed");
+      }
+
+      const publicKey = await freighter.getPublicKey?.();
+      if (!publicKey) {
+        throw new WalletNotFoundError("No public key returned from wallet");
+      }
+
+      this.connectedPublicKey = publicKey;
       return publicKey;
     } catch (error) {
-      if (error instanceof Error && error.message.includes('user rejected')) {
-        throw new WalletRejectedError('User rejected wallet connection');
+      if (error instanceof WalletNotFoundError) {
+        throw error;
       }
-      throw new WalletNotFoundError('Failed to connect wallet');
+      if (error instanceof Error && error.message.includes("user rejected")) {
+        throw new WalletRejectedError("User rejected wallet connection");
+      }
+      throw new WalletNotFoundError("Failed to connect wallet");
     }
   }
 
   disconnect(): void {
-    this.walletKit.disconnect();
+    this.connectedPublicKey = null;
     this.cache.invalidateAll();
   }
 
-  async getBalance(publicKey: string, forceRefresh = false): Promise<{ xlm: string; cached: boolean }> {
+  async sign(params: {
+    xdr: string;
+    publicKeys: string[];
+    network: string;
+  }): Promise<{ signedXdr: string }> {
+    try {
+      if (typeof window === "undefined") {
+        throw new Error("No wallet available in non-browser environment");
+      }
+
+      const freighter = (window as any).freighter;
+      if (!freighter) {
+        throw new Error("Freighter wallet not installed");
+      }
+
+      const result = await freighter.signTransaction?.(params.xdr, {
+        network: params.network,
+      });
+
+      if (!result) {
+        throw new Error("Failed to sign transaction");
+      }
+
+      return { signedXdr: result };
+    } catch (error) {
+      throw new Error(
+        `Failed to sign transaction: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  async getBalance(
+    publicKey: string,
+    forceRefresh = false
+  ): Promise<{ xlm: string; cached: boolean }> {
     const cacheKey = `balance:${publicKey}`;
-    
+
     if (!forceRefresh) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
@@ -105,14 +152,15 @@ class StellarHelper {
 
     try {
       const account = await this.server.loadAccount(publicKey);
-      const balance = account.balances
-        .filter((b: any) => b.asset_type === 'native')
-        .map((b: any) => b.balance)[0] || '0';
-      
-      this.cache.set(cacheKey, balance, 30000); // 30s TTL
+      const balance =
+        account.balances
+          .filter((b: any) => b.asset_type === "native")
+          .map((b: any) => b.balance)[0] || "0";
+
+      this.cache.set(cacheKey, balance, 30000);
       return { xlm: balance, cached: false };
     } catch (error) {
-      throw new InsufficientBalanceError('Failed to load account balance');
+      throw new InsufficientBalanceError("Failed to load account balance");
     }
   }
 
@@ -124,55 +172,57 @@ class StellarHelper {
   }): Promise<{ hash: string; success: boolean }> {
     try {
       const sourceAccount = await this.server.loadAccount(params.from);
-      const transaction = new Horizon.TransactionBuilder(sourceAccount, {
-        fee: '100',
+      const transaction = new TransactionBuilder(sourceAccount, {
+        fee: "100",
         networkPassphrase: this.networkPassphrase,
       })
         .addOperation(
-          Horizon.Operation.payment({
+          Operation.payment({
             destination: params.to,
-            asset: Horizon.Asset.native(),
+            asset: Asset.native(),
             amount: params.amount,
           })
         )
         .setTimeout(30);
 
       if (params.memo) {
-        transaction.addMemo(Horizon.Memo.text(params.memo));
+        transaction.addMemo(Memo.text(params.memo));
       }
 
       const transactionBuilt = transaction.build();
-      const { signedXdr } = await this.walletKit.sign({
+      const { signedXdr } = await this.sign({
         xdr: transactionBuilt.toXDR(),
         publicKeys: [params.from],
         network: this.networkPassphrase,
       });
 
-      const signedTransaction = Horizon.TransactionBuilder.fromXDR(
+      const signedTransaction = TransactionBuilder.fromXDR(
         signedXdr,
         this.networkPassphrase
-      ) as Horizon.Transaction;
+      ) as any;
 
       const result = await this.server.submitTransaction(signedTransaction);
-      
-      // Invalidate balance cache for both sender and receiver
+
       this.cache.invalidate(`balance:${params.from}`);
       this.cache.invalidate(`balance:${params.to}`);
 
       return { hash: result.hash, success: true };
     } catch (error: any) {
       if (error.response?.status === 404) {
-        throw new DestinationUnfundedError('Destination account not found');
+        throw new DestinationUnfundedError("Destination account not found");
       }
       throw error;
     }
   }
 
-  getExplorerLink(hash: string, type: 'tx' | 'account' | 'contract'): string {
-    const baseUrl = this.networkPassphrase.includes('Test')
-      ? 'https://stellar.expert/explorer/testnet'
-      : 'https://stellar.expert/explorer/public';
-    
+  getExplorerLink(
+    hash: string,
+    type: "tx" | "account" | "contract"
+  ): string {
+    const baseUrl = this.networkPassphrase.includes("Test")
+      ? "https://stellar.expert/explorer/testnet"
+      : "https://stellar.expert/explorer/public";
+
     return `${baseUrl}/${type}/${hash}`;
   }
 
@@ -187,4 +237,4 @@ class StellarHelper {
   }
 }
 
-export const stellar = new StellarHelper('testnet');
+export const stellar = new StellarHelper("testnet");

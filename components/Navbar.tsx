@@ -109,7 +109,7 @@ export function Navbar({ publicKey, isConnected, onConnect, onDisconnect }: Navb
                   {stellar.formatAddress(publicKey, 4, 4)}
                 </span>
               </div>
-              <Button onClick={handleDisconnect} variant="secondary" size="sm">
+              <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-3 py-1.5">
                 Disconnect
               </Button>
             </div>
@@ -135,11 +135,11 @@ export function Navbar({ publicKey, isConnected, onConnect, onDisconnect }: Navb
 
           {/* Connect Button */}
           {isConnected ? (
-            <Button onClick={handleDisconnect} variant="secondary" size="sm">
+            <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-3 py-1.5">
               {stellar.formatAddress(publicKey, 3, 3)}
             </Button>
           ) : (
-            <Button onClick={handleConnect} variant="primary" size="sm" loading={connecting}>
+            <Button onClick={handleConnect} variant="primary" className="text-xs px-3 py-1.5" loading={connecting}>
               {connecting ? <LoadingSpinner size="sm" color="white" /> : 'Connect'}
             </Button>
           )}

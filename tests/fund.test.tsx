@@ -27,7 +27,7 @@ describe('StellarFund — 5 tests', () => {
     const onClose = vi.fn()
     render(<Alert type="success" message="Campaign created!" onClose={onClose} />)
     expect(screen.getByText('Campaign created!')).toBeInTheDocument()
-    await userEvent.click(screen.getByText('✕'))
+    await userEvent.click(screen.getByRole('button'))
     expect(onClose).toHaveBeenCalledOnce()
   })
 

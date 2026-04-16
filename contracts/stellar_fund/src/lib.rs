@@ -258,7 +258,7 @@ impl StellarFund {
 #[cfg(test)]
 mod tests {
     use soroban_sdk::{
-        testutils::{Address as _, Env as _},
+        testutils::Address as _,
         Address, Env,
     };
 

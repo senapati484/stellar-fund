@@ -6,12 +6,12 @@ import { Navbar } from '@/components/Navbar';
 import { CampaignCard } from '@/components/CampaignCard';
 import { SkeletonLoader, EmptyState, Button } from '@/components/ui';
 import { Campaign } from '@/lib/contract-client';
+import { useWallet } from '@/components/WalletProvider';
 import { stellar } from '@/lib/stellar-helper';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [publicKey, setPublicKey] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
+  const { publicKey, isConnected } = useWallet();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalRaised, setTotalRaised] = useState(0);
@@ -27,9 +27,7 @@ export default function DashboardPage() {
     
     setLoading(true);
     try {
-      // Simulate loading user campaigns (since contract-client has errors)
       await new Promise(resolve => setTimeout(resolve, 1000));
-      // In production, use: const data = await fundClient.getUserCampaigns(publicKey);
       setCampaigns([]);
       setTotalRaised(0);
     } catch (error) {
@@ -41,25 +39,11 @@ export default function DashboardPage() {
     }
   };
 
-  const handleConnect = (key: string) => {
-    setPublicKey(key);
-    setIsConnected(true);
-  };
-
-  const handleDisconnect = () => {
-    setPublicKey('');
-    setIsConnected(false);
-    setCampaigns([]);
-    setTotalRaised(0);
-  };
-
   const handleWithdraw = async (campaign: Campaign) => {
     if (!publicKey) return;
     
     try {
-      // Simulate withdraw (since contract-client has errors)
       await new Promise(resolve => setTimeout(resolve, 1000));
-      // In production, use: await fundClient.withdraw(publicKey, campaign.id);
       loadCampaigns();
     } catch (error) {
       console.error('Failed to withdraw:', error);
@@ -70,12 +54,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <Navbar
-        publicKey={publicKey}
-        isConnected={isConnected}
-        onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
-      />
+      <Navbar />
 
       <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
         {!isConnected ? (

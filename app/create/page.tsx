@@ -1,25 +1,14 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { CreateCampaignForm } from '@/components/CreateCampaignForm';
+import { useWallet } from '@/components/WalletProvider';
 import { FaPlus } from 'react-icons/fa';
 
 export default function CreatePage() {
   const router = useRouter();
-  const [publicKey, setPublicKey] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
-
-  const handleConnect = (key: string) => {
-    setPublicKey(key);
-    setIsConnected(true);
-  };
-
-  const handleDisconnect = () => {
-    setPublicKey('');
-    setIsConnected(false);
-  };
+  const { publicKey, isConnected } = useWallet();
 
   const handleSuccess = (id: number) => {
     router.push(`/campaign/${id}`);
@@ -27,12 +16,7 @@ export default function CreatePage() {
 
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <Navbar
-        publicKey={publicKey}
-        isConnected={isConnected}
-        onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
-      />
+      <Navbar />
 
       <main className="max-w-[640px] mx-auto px-4 sm:px-6 py-10">
         {!isConnected ? (

@@ -7,17 +7,17 @@ import { DonationForm } from '@/components/DonationForm';
 import { CampaignStatusBadge, FundingProgressBar, SkeletonLoader, EmptyState, Button, ShareButton } from '@/components/ui';
 import { Campaign, Donation } from '@/lib/contract-client';
 import { stellar } from '@/lib/stellar-helper';
+import { useWallet } from '@/components/WalletProvider';
 
 export default function CampaignPage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const { publicKey, isConnected } = useWallet();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [publicKey, setPublicKey] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
@@ -28,9 +28,7 @@ export default function CampaignPage() {
   const loadCampaign = async () => {
     setLoading(true);
     try {
-      // Simulate loading campaign (since contract-client has errors)
       await new Promise(resolve => setTimeout(resolve, 1000));
-      // In production, use: const data = await fundClient.getCampaign(Number(id));
       setCampaign(null);
     } catch (error) {
       console.error('Failed to load campaign:', error);
@@ -42,24 +40,12 @@ export default function CampaignPage() {
 
   const loadDonations = async () => {
     try {
-      // Simulate loading donations
       await new Promise(resolve => setTimeout(resolve, 500));
-      // In production, use: const data = await fundClient.getDonations(Number(id));
       setDonations([]);
     } catch (error) {
       console.error('Failed to load donations:', error);
       setDonations([]);
     }
-  };
-
-  const handleConnect = (key: string) => {
-    setPublicKey(key);
-    setIsConnected(true);
-  };
-
-  const handleDisconnect = () => {
-    setPublicKey('');
-    setIsConnected(false);
   };
 
   const handleDonateSuccess = () => {
@@ -69,9 +55,7 @@ export default function CampaignPage() {
   const handleWithdraw = async () => {
     if (!campaign) return;
     try {
-      // Simulate withdraw (since contract-client has errors)
       await new Promise(resolve => setTimeout(resolve, 1000));
-      // In production, use: await fundClient.withdraw(publicKey, campaign.id);
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Failed to withdraw:', error);
@@ -97,12 +81,7 @@ export default function CampaignPage() {
   if (loading) {
     return (
       <div className="min-h-full flex flex-col bg-background">
-        <Navbar
-          publicKey={publicKey}
-          isConnected={isConnected}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-        />
+        <Navbar />
         <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
           <SkeletonLoader count={3} height="h-32" />
         </main>
@@ -113,12 +92,7 @@ export default function CampaignPage() {
   if (!campaign) {
     return (
       <div className="min-h-full flex flex-col bg-background">
-        <Navbar
-          publicKey={publicKey}
-          isConnected={isConnected}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-        />
+        <Navbar />
         <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
           <EmptyState
             icon="❌"
@@ -139,12 +113,7 @@ export default function CampaignPage() {
 
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <Navbar
-        publicKey={publicKey}
-        isConnected={isConnected}
-        onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
-      />
+      <Navbar />
 
       <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
         {/* Campaign Header */}

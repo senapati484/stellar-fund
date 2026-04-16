@@ -7,12 +7,11 @@ import { CampaignCard } from '@/components/CampaignCard';
 import { UserOnboardingBanner } from '@/components/UserOnboardingBanner';
 import { SkeletonLoader, EmptyState, Button } from '@/components/ui';
 import { Campaign } from '@/lib/contract-client';
-import { stellar } from '@/lib/stellar-helper';
+import { useWallet } from '@/components/WalletProvider';
 
 export default function Home() {
   const router = useRouter();
-  const [publicKey, setPublicKey] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
+  const { publicKey, isConnected } = useWallet();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
@@ -29,10 +28,15 @@ export default function Home() {
     loadStats();
   }, []);
 
+  useEffect(() => {
+    if (isConnected && publicKey) {
+      setShowOnboarding(true);
+    }
+  }, [isConnected, publicKey]);
+
   const loadCampaigns = async () => {
     setLoading(true);
     try {
-      // Simulate loading campaigns (since contract-client has errors)
       await new Promise(resolve => setTimeout(resolve, 1000));
       setCampaigns([]);
     } catch (error) {
@@ -45,7 +49,6 @@ export default function Home() {
   const loadStats = async () => {
     setStatsLoading(true);
     try {
-      // Simulate loading stats
       await new Promise(resolve => setTimeout(resolve, 500));
       setStats({
         activeCampaigns: 3,
@@ -59,17 +62,6 @@ export default function Home() {
     }
   };
 
-  const handleConnect = (key: string) => {
-    setPublicKey(key);
-    setIsConnected(true);
-    setShowOnboarding(true);
-  };
-
-  const handleDisconnect = () => {
-    setPublicKey('');
-    setIsConnected(false);
-  };
-
   const filteredCampaigns = campaigns.filter((campaign) => {
     if (filter === 'all') return true;
     if (filter === 'active') return campaign.active;
@@ -79,12 +71,7 @@ export default function Home() {
 
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <Navbar
-        publicKey={publicKey}
-        isConnected={isConnected}
-        onConnect={handleConnect}
-        onDisconnect={handleDisconnect}
-      />
+      <Navbar />
 
       <main className="flex-1 px-4 py-8 sm:px-6 sm:py-10 max-w-7xl mx-auto w-full">
         {!isConnected && (

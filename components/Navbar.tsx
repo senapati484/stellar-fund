@@ -1,58 +1,23 @@
 'use client';
 
-import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { stellar, WalletNotFoundError, WalletRejectedError } from '@/lib/stellar-helper';
+import { useWallet } from './WalletProvider';
 import { Alert, Button, LoadingSpinner } from './ui';
 import { FaHome, FaPlus, FaUser } from 'react-icons/fa';
 
-interface NavbarProps {
-  publicKey: string;
-  isConnected: boolean;
-  onConnect: (key: string) => void;
-  onDisconnect: () => void;
-}
-
-export function Navbar({ publicKey, isConnected, onConnect, onDisconnect }: NavbarProps) {
+export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [connecting, setConnecting] = useState(false);
-  const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string; hint?: string } | null>(null);
+  const { publicKey, isConnected, isConnecting, connect, disconnect, error } = useWallet();
 
   const handleConnect = async () => {
-    setConnecting(true);
-    setAlert(null);
-
     try {
-      const key = await stellar.connectWallet();
-      onConnect(key);
-    } catch (error) {
-      if (error instanceof WalletNotFoundError) {
-        setAlert({
-          type: 'warning',
-          message: 'No wallet found. Install Freighter.',
-          hint: 'Download Freighter from https://freighter.app',
-        });
-      } else if (error instanceof WalletRejectedError) {
-        setAlert({
-          type: 'info',
-          message: 'Connection cancelled.',
-        });
-      } else {
-        setAlert({
-          type: 'error',
-          message: 'Failed to connect wallet.',
-          hint: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    } finally {
-      setConnecting(false);
-    }
+      await connect();
+    } catch (err) {}
   };
 
-  const handleDisconnect = () => {
-    stellar.disconnect();
-    onDisconnect();
+  const handleDisconnect = async () => {
+    await disconnect();
   };
 
   const navLinks = [
@@ -114,8 +79,8 @@ export function Navbar({ publicKey, isConnected, onConnect, onDisconnect }: Navb
               </Button>
             </div>
           ) : (
-            <Button onClick={handleConnect} variant="primary" loading={connecting}>
-              {connecting ? 'Connecting...' : 'Connect Wallet'}
+            <Button onClick={handleConnect} variant="primary" loading={isConnecting}>
+              {isConnecting ? 'Connecting...' : 'Connect Wallet'}
             </Button>
           )}
         </div>
@@ -139,8 +104,8 @@ export function Navbar({ publicKey, isConnected, onConnect, onDisconnect }: Navb
               {stellar.formatAddress(publicKey, 3, 3)}
             </Button>
           ) : (
-            <Button onClick={handleConnect} variant="primary" className="text-xs px-3 py-1.5" loading={connecting}>
-              {connecting ? <LoadingSpinner size="sm" color="white" /> : 'Connect'}
+            <Button onClick={handleConnect} variant="primary" className="text-xs px-3 py-1.5" loading={isConnecting}>
+              {isConnecting ? <LoadingSpinner size="sm" color="white" /> : 'Connect'}
             </Button>
           )}
         </div>
@@ -167,16 +132,18 @@ export function Navbar({ publicKey, isConnected, onConnect, onDisconnect }: Navb
       </nav>
 
       {/* Error Alert */}
-      {alert && (
+      {error && (
         <div className="animate-slide-up">
           <Alert
-            type={alert.type}
-            message={alert.message}
-            hint={alert.hint}
-            onClose={() => setAlert(null)}
+            type="warning"
+            message={error}
+            hint="Download Freighter from https://freighter.app"
+            onClose={() => {}}
           />
         </div>
       )}
     </>
   );
 }
+
+import { stellar } from '@/lib/stellar-helper';

@@ -15,8 +15,10 @@ export default function CampaignPage() {
   const router = useRouter();
   const id = params.id as string;
   const { publicKey, isConnected } = useWallet();
-  const { getCampaign } = useCampaigns();
+  const { getCampaign, campaigns } = useCampaigns();
 
+  console.log('Campaign page - id:', id, 'campaigns:', campaigns);
+  
   const campaign = id ? getCampaign(parseInt(id)) : undefined;
   const [donations, setDonations] = useState<Donation[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);

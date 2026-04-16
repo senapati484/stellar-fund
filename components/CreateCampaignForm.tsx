@@ -106,6 +106,8 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
         owner: publicKey,
       });
 
+      console.log('Campaign added with ID:', campaignId);
+
       const hash = 'simulated-tx-hash';
       setProgress({ stage: 'success', message: 'Confirmed!', hash });
 
@@ -115,7 +117,9 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
         hint: `Campaign ID: ${campaignId}`,
       });
 
-      onSuccess(campaignId);
+      setTimeout(() => {
+        onSuccess(campaignId);
+      }, 1500);
     } catch (error) {
       setAlert({
         type: 'error',

@@ -5,52 +5,31 @@ import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { CampaignCard } from '@/components/CampaignCard';
 import { SkeletonLoader, EmptyState, Button } from '@/components/ui';
-import { Campaign } from '@/lib/contract-client';
+import { useCampaigns } from '@/components/CampaignProvider';
 import { useWallet } from '@/components/WalletProvider';
 import { stellar } from '@/lib/stellar-helper';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { publicKey, isConnected } = useWallet();
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const { campaigns } = useCampaigns();
   const [loading, setLoading] = useState(false);
-  const [totalRaised, setTotalRaised] = useState(0);
 
-  useEffect(() => {
-    if (isConnected && publicKey) {
-      loadCampaigns();
-    }
-  }, [isConnected, publicKey]);
+  const userCampaigns = publicKey 
+    ? campaigns.filter(c => c.owner === publicKey)
+    : [];
+  
+  const totalRaised = userCampaigns.reduce((sum, c) => sum + c.raised, 0);
+  const activeCampaigns = userCampaigns.filter(c => c.active).length;
 
-  const loadCampaigns = async () => {
+  const handleWithdraw = async (campaignId: number) => {
     if (!publicKey) return;
-    
-    setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      setCampaigns([]);
-      setTotalRaised(0);
-    } catch (error) {
-      console.error('Failed to load campaigns:', error);
-      setCampaigns([]);
-      setTotalRaised(0);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleWithdraw = async (campaign: Campaign) => {
-    if (!publicKey) return;
-    
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      loadCampaigns();
     } catch (error) {
       console.error('Failed to withdraw:', error);
     }
   };
-
-  const activeCampaigns = campaigns.filter(c => c.active).length;
 
   return (
     <div className="min-h-full flex flex-col bg-background">
@@ -94,7 +73,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 animate-slide-up">
               <div className="bg-surface border border-borderInner rounded-xl p-5">
                 <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Campaigns</p>
-                <p className="text-2xl font-semibold text-textMain">{campaigns.length}</p>
+                <p className="text-2xl font-semibold text-textMain">{userCampaigns.length}</p>
               </div>
               <div className="bg-surface border border-borderInner rounded-xl p-5">
                 <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Total Raised</p>
@@ -112,7 +91,7 @@ export default function DashboardPage() {
             <div className="space-y-4">
               {loading ? (
                 <SkeletonLoader count={2} height="h-24" />
-              ) : campaigns.length === 0 ? (
+              ) : userCampaigns.length === 0 ? (
                 <EmptyState
                   icon="🌱"
                   title="No campaigns yet"
@@ -124,7 +103,7 @@ export default function DashboardPage() {
                   }
                 />
               ) : (
-                campaigns.map((campaign) => (
+                userCampaigns.map((campaign) => (
                   <div key={campaign.id} className="flex items-start gap-4">
                     <div className="flex-1">
                       <CampaignCard
@@ -135,7 +114,7 @@ export default function DashboardPage() {
                     </div>
                     {campaign.raised > 0 && !campaign.withdrawn && (
                       <Button
-                        onClick={() => handleWithdraw(campaign)}
+                        onClick={() => handleWithdraw(campaign.id)}
                         variant="secondary"
                         className="text-xs px-3 py-1.5"
                       >

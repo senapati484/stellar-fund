@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { TxProgress } from '@/lib/contract-client';
 import { stellar } from '@/lib/stellar-helper';
+import { useCampaigns } from './CampaignProvider';
 import { Input, Textarea, TxProgressStepper, Alert, Button } from './ui';
 import { FaCheck } from 'react-icons/fa';
 
@@ -12,6 +13,7 @@ interface CreateCampaignFormProps {
 }
 
 export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormProps) {
+  const { addCampaign } = useCampaigns();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -79,7 +81,6 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
     try {
       setProgress({ stage: 'building', message: 'Building transaction…' });
 
-      // Simulate contract call (since contract-client has errors)
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       setProgress({ stage: 'signing', message: 'Waiting for wallet signature…' });
@@ -94,8 +95,18 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
 
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      const duration = parseInt(durationDays);
+      const deadline = Math.floor(Date.now() / 1000) + (duration * 24 * 60 * 60);
+
+      const campaignId = addCampaign({
+        title,
+        description,
+        goal: parseFloat(goalXlm),
+        deadline,
+        owner: publicKey,
+      });
+
       const hash = 'simulated-tx-hash';
-      const campaignId = Math.floor(Math.random() * 1000);
       setProgress({ stage: 'success', message: 'Confirmed!', hash });
 
       setAlert({
@@ -220,10 +231,10 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
                   key={days}
                   type="button"
                   onClick={() => setDurationDays(days)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
                     durationDays === days
-                      ? 'bg-primary text-white'
-                      : 'bg-surface border border-borderInner hover:border-primary'
+                      ? 'bg-primary text-white shadow-md ring-2 ring-primary ring-offset-2 ring-offset-surface'
+                      : 'bg-surface border-2 border-borderInner text-textMain hover:border-primary hover:shadow-sm'
                   }`}
                 >
                   {days} days

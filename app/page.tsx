@@ -6,27 +6,16 @@ import { Navbar } from '@/components/Navbar';
 import { CampaignCard } from '@/components/CampaignCard';
 import { UserOnboardingBanner } from '@/components/UserOnboardingBanner';
 import { SkeletonLoader, EmptyState, Button } from '@/components/ui';
-import { Campaign } from '@/lib/contract-client';
+import { useCampaigns } from '@/components/CampaignProvider';
 import { useWallet } from '@/components/WalletProvider';
 
 export default function Home() {
   const router = useRouter();
   const { publicKey, isConnected } = useWallet();
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { campaigns } = useCampaigns();
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [stats, setStats] = useState({
-    activeCampaigns: 0,
-    totalRaised: 0,
-    totalDonors: 0,
-  });
-  const [statsLoading, setStatsLoading] = useState(true);
-
-  useEffect(() => {
-    loadCampaigns();
-    loadStats();
-  }, []);
 
   useEffect(() => {
     if (isConnected && publicKey) {
@@ -34,40 +23,18 @@ export default function Home() {
     }
   }, [isConnected, publicKey]);
 
-  const loadCampaigns = async () => {
-    setLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setCampaigns([]);
-    } catch (error) {
-      console.error('Failed to load campaigns:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
-    setStatsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setStats({
-        activeCampaigns: 3,
-        totalRaised: 1500,
-        totalDonors: 42,
-      });
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-    } finally {
-      setStatsLoading(false);
-    }
-  };
-
   const filteredCampaigns = campaigns.filter((campaign) => {
     if (filter === 'all') return true;
     if (filter === 'active') return campaign.active;
     if (filter === 'completed') return !campaign.active;
     return true;
   });
+
+  const stats = {
+    activeCampaigns: campaigns.filter(c => c.active).length,
+    totalRaised: campaigns.reduce((sum, c) => sum + c.raised, 0),
+    totalDonors: 0,
+  };
 
   return (
     <div className="min-h-full flex flex-col bg-background">
@@ -95,27 +62,15 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10 animate-slide-up stagger-2">
           <div className="bg-surface border border-borderInner rounded-xl p-5">
             <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Active Campaigns</p>
-            {statsLoading ? (
-              <SkeletonLoader height="h-8" width="w-20" />
-            ) : (
-              <p className="text-2xl font-semibold text-textMain">{stats.activeCampaigns}</p>
-            )}
+            <p className="text-2xl font-semibold text-textMain">{stats.activeCampaigns}</p>
           </div>
           <div className="bg-surface border border-borderInner rounded-xl p-5">
             <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Total Raised (XLM)</p>
-            {statsLoading ? (
-              <SkeletonLoader height="h-8" width="w-20" />
-            ) : (
-              <p className="text-2xl font-semibold text-textMain">{stats.totalRaised}</p>
-            )}
+            <p className="text-2xl font-semibold text-textMain">{stats.totalRaised}</p>
           </div>
           <div className="bg-surface border border-borderInner rounded-xl p-5">
             <p className="text-textMuted text-xs uppercase tracking-wider mb-2">Total Donors</p>
-            {statsLoading ? (
-              <SkeletonLoader height="h-8" width="w-20" />
-            ) : (
-              <p className="text-2xl font-semibold text-textMain">{stats.totalDonors}</p>
-            )}
+            <p className="text-2xl font-semibold text-textMain">{stats.totalDonors}</p>
           </div>
         </div>
 
@@ -125,10 +80,10 @@ export default function Home() {
             <button
               key={filterOption}
               onClick={() => setFilter(filterOption)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 filter === filterOption
-                  ? 'bg-primary text-white'
-                  : 'bg-surface border border-borderInner text-textMuted hover:text-textMain'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-surface border-2 border-borderInner text-textMuted hover:border-primary hover:shadow-sm'
               }`}
             >
               {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
@@ -143,7 +98,7 @@ export default function Home() {
               <SkeletonLoader key={i} height="h-48" rounded="rounded-xl" />
             ))}
           </div>
-        ) : campaigns.length === 0 ? (
+        ) : filteredCampaigns.length === 0 ? (
           <EmptyState
             icon="🌱"
             title="No campaigns yet"

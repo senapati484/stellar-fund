@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { DonationForm } from '@/components/DonationForm';
 import { CampaignStatusBadge, FundingProgressBar, SkeletonLoader, EmptyState, Button, ShareButton } from '@/components/ui';
-import { Campaign, Donation } from '@/lib/contract-client';
+import { Donation } from '@/lib/contract-client';
+import { useCampaigns } from '@/components/CampaignProvider';
 import { stellar } from '@/lib/stellar-helper';
 import { useWallet } from '@/components/WalletProvider';
 
@@ -14,29 +15,15 @@ export default function CampaignPage() {
   const router = useRouter();
   const id = params.id as string;
   const { publicKey, isConnected } = useWallet();
+  const { getCampaign } = useCampaigns();
 
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const campaign = id ? getCampaign(parseInt(id)) : undefined;
   const [donations, setDonations] = useState<Donation[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    loadCampaign();
     loadDonations();
   }, [id, refreshTrigger]);
-
-  const loadCampaign = async () => {
-    setLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setCampaign(null);
-    } catch (error) {
-      console.error('Failed to load campaign:', error);
-      setCampaign(null);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadDonations = async () => {
     try {
@@ -77,17 +64,6 @@ export default function CampaignPage() {
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-full flex flex-col bg-background">
-        <Navbar />
-        <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-10">
-          <SkeletonLoader count={3} height="h-32" />
-        </main>
-      </div>
-    );
-  }
 
   if (!campaign) {
     return (

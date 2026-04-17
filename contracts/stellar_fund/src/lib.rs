@@ -4,6 +4,7 @@ use soroban_sdk::{
 };
 
 const CAMPAIGNS_KEY: soroban_sdk::Symbol = symbol_short!("CAMPS");
+const DONATIONS_KEY: soroban_sdk::Symbol = symbol_short!("DONS");
 
 #[contracttype]
 #[derive(Clone)]
@@ -99,6 +100,18 @@ impl StellarFund {
             message,
             timestamp: env.ledger().timestamp(),
         };
+
+        // Store donation persistently
+        let mut donations: Map<u64, Vec<Donation>> = env
+            .storage()
+            .persistent()
+            .get(&DONATIONS_KEY)
+            .unwrap_or(Map::new(&env));
+
+        let mut campaign_donations = donations.get(campaign_id).unwrap_or(Vec::new(&env));
+        campaign_donations.push_back(donation);
+        donations.set(campaign_id, campaign_donations);
+        env.storage().persistent().set(&DONATIONS_KEY, &donations);
 
         // Update campaign raised amount
         campaign.raised += amount;
@@ -211,6 +224,15 @@ impl StellarFund {
             .get(&CAMPAIGNS_KEY)
             .unwrap_or(Map::new(&env));
         campaigns.keys().len() as u32
+    }
+
+    pub fn get_donations(env: Env, campaign_id: u64) -> Vec<Donation> {
+        let donations: Map<u64, Vec<Donation>> = env
+            .storage()
+            .persistent()
+            .get(&DONATIONS_KEY)
+            .unwrap_or(Map::new(&env));
+        donations.get(campaign_id).unwrap_or(Vec::new(&env))
     }
 }
 

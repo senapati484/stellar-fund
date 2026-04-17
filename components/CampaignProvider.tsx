@@ -104,11 +104,15 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Get count before creation to find the new campaign later
+      const countBefore = await clientRef.current.getCampaignCount();
+      console.log('Campaign count before:', countBefore);
+
       // Calculate duration from deadline
       const durationDays = Math.ceil((campaignData.deadline - Math.floor(Date.now() / 1000)) / (24 * 60 * 60));
 
-      // Create campaign on blockchain and get the real campaign ID
-      const campaignId = await clientRef.current.createCampaign({
+      // Create campaign on blockchain (returns fallback timestamp for now)
+      await clientRef.current.createCampaign({
         ownerKey: campaignData.owner,
         title: campaignData.title,
         description: campaignData.description,
@@ -116,11 +120,26 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         durationDays: Math.max(1, durationDays)
       });
 
-      // Refresh to get the new campaign from blockchain
-      await refreshCampaigns();
+      // Refresh to get all campaigns from blockchain
+      const { campaigns: allCampaigns } = await clientRef.current.getAllCampaigns();
+      
+      // Find the newly created campaign - either by incremented count or most recent
+      let newCampaign: Campaign | undefined;
+      if (allCampaigns.length > 0) {
+        // Sort by created_at descending to get the newest
+        const sorted = [...allCampaigns].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+        newCampaign = sorted[0];
+      }
+      
+      if (!newCampaign) {
+        throw new Error('Failed to find newly created campaign');
+      }
 
-      // Return the actual campaign ID from the blockchain (not a fake timestamp)
-      return campaignId;
+      console.log('New campaign created with ID:', newCampaign.id);
+      setCampaigns(allCampaigns);
+      
+      // Return the actual campaign ID from the blockchain
+      return newCampaign.id;
     } catch (err) {
       console.error('Failed to create campaign on blockchain:', err);
       throw err;

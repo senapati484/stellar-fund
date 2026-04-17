@@ -167,7 +167,7 @@ class FundContractClient {
         try {
           // Poll using Horizon API via fetch (avoids SDK's broken getTransaction XDR parsing)
           const horizonUrl = "https://horizon-testnet.stellar.org";
-          const response = await fetch(`${horizonUrl}/transactions/${hash}?c=0`);
+          const response = await fetch(`${horizonUrl}/transactions/${hash}`);
           const txData = await response.json();
 
           if (txData.successful === true) {
@@ -275,16 +275,9 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${errorMsg}`);
       }
 
-      // Step 4: Extract campaign ID from simulation result (the contract returns u64)
-      const createResult = simResponse.result?.retval;
-      let campaignId: string;
-      if (createResult?._switch?.name === 'scvU64') {
-        campaignId = String(createResult._value);
-      } else {
-        // Fallback: use timestamp-based ID (will be replaced by real one after confirm)
-        campaignId = String(Date.now());
-      }
-      console.log('[ContractClient] Campaign ID:', campaignId);
+      // Step 4: Simulation-only returns footprint data, not actual return value
+      // The caller will find the real ID after refresh by looking at most recent campaign
+      console.log('[ContractClient] Transaction simulated, will find real campaign ID after submission');
 
       // Step 5: Assemble using prepareTransaction (handles all Soroban transaction assembly)
       console.log('[ContractClient] Preparing final transaction...');
@@ -295,8 +288,8 @@ class FundContractClient {
       console.log('[ContractClient] Submitting transaction...');
       await this.submitTx(params.ownerKey, txXdr, simResponse);
 
-      // Return the actual campaign ID from the contract
-      return campaignId;
+      console.log('[ContractClient] Campaign created successfully - caller will find real ID');
+      return "pending"; // Caller will find the real ID after refresh
     } catch (error) {
       throw new Error(
         `Failed to create campaign: ${

@@ -33,14 +33,24 @@ function normalizeAddress(address: string): string {
   }
 }
 
-// Alternative: Use Address.fromString() directly without toString() roundtrip
+// Alternative: Use Address.account() for public key addresses
 function encodeAddressToScVal(address: string) {
-  // Try Address.fromString() first (handles G... addresses)
+  // For Stellar public keys (G...), use Address.account()
   try {
+    if (address.startsWith('G') && address.length === 56) {
+      // Convert G... address to Buffer and create account address
+      const buffer = StrKey.decodeEd25519PublicKey(address);
+      return Address.account(buffer).toScVal();
+    }
+    // Fallback to fromString for other formats
     return Address.fromString(address).toScVal();
   } catch {
-    // Fallback to manual normalization
+    // Final fallback to manual normalization
     const normalized = normalizeAddress(address);
+    if (normalized.startsWith('G') && normalized.length === 56) {
+      const buffer = StrKey.decodeEd25519PublicKey(normalized);
+      return Address.account(buffer).toScVal();
+    }
     return Address.fromString(normalized).toScVal();
   }
 }
@@ -239,6 +249,11 @@ export class FundContractClient {
       )
       .setTimeout(30)
       .build();
+
+    // Log XDR for debugging
+    console.log('Transaction XDR:', tx.toXDR());
+    console.log('Owner key:', params.ownerKey);
+    console.log('Encoded Address:', encodeAddressToScVal(params.ownerKey));
 
     // Simulate transaction before submission to catch errors early
     try {

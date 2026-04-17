@@ -32,20 +32,20 @@ export default function Home() {
 
   // Calculate donor counts for each campaign (async - simplified for now)
   const campaignDonorCounts = filteredCampaigns.reduce((acc, campaign) => {
-    acc[campaign.id] = 0; // Will be updated asynchronously
+    acc[String(campaign.id)] = 0;
     return acc;
-  }, {} as Record<number, number>);
+  }, {} as Record<string, number>);
 
   // Load donor counts asynchronously
   useEffect(() => {
     const loadDonorCounts = async () => {
-      const counts: Record<number, number> = {};
+      const counts: Record<string, number> = {};
       for (const campaign of filteredCampaigns) {
         try {
           const donations = await getDonations(campaign.id);
-          counts[campaign.id] = donations.length;
+          counts[String(campaign.id)] = donations.length;
         } catch (err) {
-          counts[campaign.id] = 0;
+          counts[String(campaign.id)] = 0;
         }
       }
     };
@@ -55,7 +55,7 @@ export default function Home() {
   const stats = {
     activeCampaigns: campaigns.filter(c => c.active).length,
     totalRaised: campaigns.reduce((sum, c) => sum + c.raised, 0),
-    totalDonors: filteredCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[c.id] || 0), 0),
+    totalDonors: filteredCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[String(c.id)] || 0), 0),
   };
 
   return (

@@ -43,7 +43,7 @@ export default function DashboardPage() {
 
   const totalRaised = userCampaigns.reduce((sum, c) => sum + c.raised, 0);
   const activeCampaigns = userCampaigns.filter(c => c.active).length;
-  const totalDonors = userCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[String(c.id)] || 0), 0);
+  const totalDonors = userCampaigns.reduce<number>((sum, c) => sum + ((campaignDonorCounts as Record<string, number>)[String(c.id)] || 0), 0);
 
   const handleWithdraw = async (campaignId: string) => {
     if (!publicKey) return;
@@ -189,7 +189,7 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {userCampaigns.map((campaign) => {
                     const progressPercent = Math.min(100, Math.round((campaign.raised / campaign.goal) * 100));
-                    const donorCount = campaignDonorCounts[String(campaign.id)] || 0;
+                    const donorCount = (campaignDonorCounts as Record<string, number>)[String(campaign.id)] || 0;
                     const daysLeft = Math.max(0, Math.ceil((campaign.deadline - Date.now() / 1000) / 86400));
 
                     return (

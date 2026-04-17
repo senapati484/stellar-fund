@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { FundContractClient, Campaign as ContractCampaign, Donation as ContractDonation } from '@/lib/contract-client';
 
 export interface Campaign extends ContractCampaign {}
@@ -39,15 +39,24 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<FundContractClient | null>(null);
+  const clientRef = useRef<FundContractClient | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    clientRef.current = client;
+  }, [client]);
 
   // Initialize blockchain contract client
   useEffect(() => {
     try {
+      console.log('Initializing FundContractClient...');
+      console.log('Contract ID:', process.env.NEXT_PUBLIC_CONTRACT_ID);
       const fundClient = new FundContractClient((progress) => {
         console.log('Contract progress:', progress);
       });
       setClient(fundClient);
       setError(null);
+      console.log('FundContractClient initialized successfully');
     } catch (err) {
       console.error('Failed to initialize contract client:', err);
       setError('Failed to connect to blockchain. Check contract ID.');
@@ -56,43 +65,50 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   // Fetch campaigns from blockchain - shared across all users
   const refreshCampaigns = useCallback(async () => {
-    if (!client) {
+    if (!clientRef.current) {
+      console.log('refreshCampaigns: client not ready yet');
       setLoading(false);
       return;
     }
 
     try {
-      const { campaigns: fetchedCampaigns } = await client.getAllCampaigns();
+      console.log('Fetching campaigns from blockchain...');
+      const { campaigns: fetchedCampaigns } = await clientRef.current.getAllCampaigns();
+      console.log('Campaigns loaded from blockchain:', fetchedCampaigns.length, fetchedCampaigns);
       setCampaigns(fetchedCampaigns);
-      console.log('Campaigns loaded from blockchain:', fetchedCampaigns.length);
     } catch (err) {
       console.error('Failed to fetch campaigns from blockchain:', err);
       setError('Failed to load campaigns from blockchain.');
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, []);
 
-  // Load campaigns on mount
+  // Fetch on mount and when client becomes available
   useEffect(() => {
-    refreshCampaigns();
-    
-    // Refresh every 30 seconds to keep data in sync
+    if (client) {
+      console.log('Client available, fetching campaigns...');
+      refreshCampaigns();
+    }
+  }, [client, refreshCampaigns]);
+
+  // Set up polling interval
+  useEffect(() => {
     const interval = setInterval(refreshCampaigns, 30000);
     return () => clearInterval(interval);
   }, [refreshCampaigns]);
 
   const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
-    if (!client) {
+    if (!clientRef.current) {
       throw new Error('Blockchain contract not available');
     }
 
     try {
       // Calculate duration from deadline
       const durationDays = Math.ceil((campaignData.deadline - Math.floor(Date.now() / 1000)) / (24 * 60 * 60));
-      
+
       // Create campaign on blockchain
-      await client.createCampaign({
+      await clientRef.current.createCampaign({
         ownerKey: campaignData.owner,
         title: campaignData.title,
         description: campaignData.description,
@@ -102,7 +118,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
       // Refresh to get the new campaign from blockchain
       await refreshCampaigns();
-      
+
       // Return a generated ID (actual ID comes from blockchain)
       return Date.now();
     } catch (err) {
@@ -137,13 +153,13 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   };
 
   const addDonation = async (donationData: Omit<Donation, 'timestamp'>) => {
-    if (!client) {
+    if (!clientRef.current) {
       throw new Error('Blockchain contract not available');
     }
 
     try {
       // Submit donation to blockchain using recordDonation
-      await client.recordDonation({
+      await clientRef.current.recordDonation({
         donorKey: donationData.donor,
         campaignId: donationData.campaignId,
         amountXlm: donationData.amount,
@@ -159,12 +175,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   };
 
   const getDonations = async (campaignId: number): Promise<Donation[]> => {
-    if (!client) {
+    if (!clientRef.current) {
       throw new Error('Blockchain contract not available');
     }
 
     try {
-      const { donations: fetchedDonations } = await client.getDonations(campaignId, true);
+      const { donations: fetchedDonations } = await clientRef.current.getDonations(campaignId, true);
       return fetchedDonations;
     } catch (err) {
       console.error('Failed to fetch donations from blockchain:', err);

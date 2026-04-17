@@ -1,11 +1,17 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { TxProgress } from '@/lib/contract-client';
-import { Campaign, useCampaigns } from '@/components/CampaignProvider';
-import { stellar, WalletRejectedError, InsufficientBalanceError, ContractError, CampaignExpiredError } from '@/lib/stellar-helper';
-import { Input, TxProgressStepper, Alert, Button } from './ui';
-import { FaHeart } from 'react-icons/fa';
+import { useState, useEffect } from "react";
+import { TxProgress } from "@/lib/contract-client";
+import { Campaign, useCampaigns } from "@/components/CampaignProvider";
+import {
+  stellar,
+  WalletRejectedError,
+  InsufficientBalanceError,
+  ContractError,
+  CampaignExpiredError,
+} from "@/lib/stellar-helper";
+import { Input, TxProgressStepper, Alert, Button } from "./ui";
+import { FaHeart } from "react-icons/fa";
 
 interface DonationFormProps {
   campaign: Campaign;
@@ -14,21 +20,32 @@ interface DonationFormProps {
   onDonate?: (amount: number, message: string) => void;
 }
 
-export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: DonationFormProps) {
+export function DonationForm({
+  campaign,
+  publicKey,
+  onSuccess,
+  onDonate,
+}: DonationFormProps) {
   const { addDonation } = useCampaigns();
-  const [amount, setAmount] = useState('');
-  const [message, setMessage] = useState('');
-  const [errors, setErrors] = useState<{ amount?: string; message?: string }>({});
-  const [progress, setProgress] = useState<TxProgress>({ stage: 'idle' });
-  const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string; hint?: string } | null>(null);
-  const [xlmBalance, setXlmBalance] = useState<string>('0');
+  const [amount, setAmount] = useState("");
+  const [message, setMessage] = useState("");
+  const [errors, setErrors] = useState<{ amount?: string; message?: string }>(
+    {},
+  );
+  const [progress, setProgress] = useState<TxProgress>({ stage: "idle" });
+  const [alert, setAlert] = useState<{
+    type: "success" | "error" | "warning" | "info";
+    message: string;
+    hint?: string;
+  } | null>(null);
+  const [xlmBalance, setXlmBalance] = useState<string>("0");
 
   const fetchBalance = async () => {
     try {
       const { xlm } = await stellar.getBalance(publicKey);
       setXlmBalance(xlm);
     } catch (error) {
-      console.error('Failed to fetch balance:', error);
+      console.error("Failed to fetch balance:", error);
     }
   };
 
@@ -40,10 +57,10 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
     const newErrors: { amount?: string; message?: string } = {};
 
     if (!amount || parseFloat(amount) <= 0) {
-      newErrors.amount = 'Please enter a valid amount';
+      newErrors.amount = "Please enter a valid amount";
     } else if (parseFloat(amount) > parseFloat(xlmBalance)) {
-      newErrors.amount = 'Insufficient balance';
-    } else if (campaign.capDonationsAtGoal && campaign.raised + parseFloat(amount) > campaign.goal) {
+      newErrors.amount = "Insufficient balance";
+    } else if (campaign.raised + parseFloat(amount) > campaign.goal) {
       newErrors.amount = `Campaign goal reached. Maximum donation: ${(campaign.goal - campaign.raised).toFixed(2)} XLM`;
     }
 
@@ -57,26 +74,29 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
     if (!validate()) return;
 
     try {
-      setProgress({ stage: 'building', message: 'Building transaction…' });
+      setProgress({ stage: "building", message: "Building transaction…" });
 
       // Send XLM payment
       await stellar.sendPayment({
         from: publicKey,
         to: campaign.owner,
         amount: amount,
-        memo: 'StellarFund donation',
+        memo: "StellarFund donation",
       });
 
-      setProgress({ stage: 'signing', message: 'Waiting for wallet signature…' });
+      setProgress({
+        stage: "signing",
+        message: "Waiting for wallet signature…",
+      });
 
       // Record donation on blockchain
       const amountXlm = parseFloat(amount);
-      
-      setProgress({ stage: 'submitting', message: 'Broadcasting to network…' });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setProgress({ stage: "submitting", message: "Broadcasting to network…" });
 
-      setProgress({ stage: 'confirming', message: 'Confirming on-chain…' });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      setProgress({ stage: "confirming", message: "Confirming on-chain…" });
 
       // Record donation on blockchain
       await addDonation({
@@ -86,13 +106,13 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
         message: message,
       });
 
-      const hash = 'recorded-on-chain';
-      setProgress({ stage: 'success', message: 'Confirmed!', hash });
+      const hash = "recorded-on-chain";
+      setProgress({ stage: "success", message: "Confirmed!", hash });
 
       setAlert({
-        type: 'success',
-        message: 'Donation successful!',
-        hint: 'Your donation has been recorded on-chain.',
+        type: "success",
+        message: "Donation successful!",
+        hint: "Your donation has been recorded on-chain.",
       });
 
       if (onDonate) {
@@ -103,23 +123,23 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
     } catch (error) {
       if (error instanceof WalletRejectedError) {
         setAlert({
-          type: 'error',
-          message: 'Transaction rejected',
-          hint: 'You rejected the transaction in your wallet.',
+          type: "error",
+          message: "Transaction rejected",
+          hint: "You rejected the transaction in your wallet.",
         });
       } else {
         setAlert({
-          type: 'error',
-          message: 'An error occurred during donation.',
-          hint: error instanceof Error ? error.message : 'Unknown error',
+          type: "error",
+          message: "An error occurred during donation.",
+          hint: error instanceof Error ? error.message : "Unknown error",
         });
       }
-      setProgress({ stage: 'idle' });
+      setProgress({ stage: "idle" });
     }
   };
 
   const isExpired = campaign.deadline < Date.now() / 1000;
-  const isGoalReached = campaign.capDonationsAtGoal && campaign.raised >= campaign.goal;
+  const isGoalReached = campaign.raised >= campaign.goal;
 
   return (
     <div className="claude-card p-5 sm:p-6">
@@ -127,14 +147,22 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
         <div className="w-10 h-10 rounded-full bg-[#F5F5F5] flex items-center justify-center">
           <FaHeart className="text-primary w-5 h-5" />
         </div>
-        <h3 className="font-serif font-medium text-lg text-textMain">Support This Campaign</h3>
+        <h3 className="font-serif font-medium text-lg text-textMain">
+          Support This Campaign
+        </h3>
       </div>
 
       {(isExpired || campaign.withdrawn || isGoalReached) && (
         <Alert
           type="warning"
           message="This campaign is no longer accepting donations."
-          hint={isExpired ? 'The campaign deadline has passed.' : campaign.withdrawn ? 'The campaign has been completed.' : 'The funding goal has been reached.'}
+          hint={
+            isExpired
+              ? "The campaign deadline has passed."
+              : campaign.withdrawn
+                ? "The campaign has been completed."
+                : "The funding goal has been reached."
+          }
           onClose={() => setAlert(null)}
         />
       )}
@@ -143,7 +171,9 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-textMain mb-1">Amount (XLM)</label>
+              <label className="block text-sm font-medium text-textMain mb-1">
+                Amount (XLM)
+              </label>
               <div className="flex items-center gap-2">
                 <Input
                   label=""
@@ -157,18 +187,20 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
                 />
                 <span className="text-textMain font-medium text-sm">XLM</span>
               </div>
-              <p className="text-textMuted text-xs mt-1">Your balance: {xlmBalance} XLM</p>
+              <p className="text-textMuted text-xs mt-1">
+                Your balance: {xlmBalance} XLM
+              </p>
 
               <div className="flex flex-wrap gap-2 mt-3">
-                {['1', '5', '10', '50'].map((preset) => (
+                {["1", "5", "10", "50"].map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setAmount(preset)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
                       amount === preset
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-surface text-textMain border-borderInner hover:border-primary'
+                        ? "bg-primary text-white border-primary"
+                        : "bg-surface text-textMain border-borderInner hover:border-primary"
                     }`}
                   >
                     {preset} XLM
@@ -178,7 +210,9 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-textMain mb-1">Message (Optional)</label>
+              <label className="block text-sm font-medium text-textMain mb-1">
+                Message (Optional)
+              </label>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -187,12 +221,16 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
                 maxLength={100}
                 className="claude-textarea"
               />
-              <p className="text-textMuted text-xs mt-1">{message.length}/100</p>
+              <p className="text-textMuted text-xs mt-1">
+                {message.length}/100
+              </p>
             </div>
 
-            {progress.stage !== 'idle' && <TxProgressStepper progress={progress} />}
+            {progress.stage !== "idle" && (
+              <TxProgressStepper progress={progress} />
+            )}
 
-            {progress.stage === 'idle' && (
+            {progress.stage === "idle" && (
               <Button
                 type="submit"
                 variant="primary"
@@ -200,7 +238,7 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
                 disabled={!amount || parseFloat(amount) <= 0}
                 loading={false}
               >
-                Donate {amount || '0'} XLM
+                Donate {amount || "0"} XLM
               </Button>
             )}
 
@@ -217,7 +255,8 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
       )}
 
       <div className="bg-[#F5F5F5] border border-borderInner rounded-lg p-3 text-xs text-textMuted mt-4">
-        Donations are sent directly to the campaign creator's wallet on Stellar testnet.
+        Donations are sent directly to the campaign creator's wallet on Stellar
+        testnet.
       </div>
     </div>
   );

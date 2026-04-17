@@ -1,5 +1,4 @@
 import {
-  Soroban,
   xdr,
   Contract,
   TransactionBuilder,
@@ -10,25 +9,26 @@ import {
   rpc,
   StrKey,
   Account,
+  Keypair,
+  SorobanDataBuilder,
+  TimeoutInfinite,
+  XdrLargeInt,
 } from "@stellar/stellar-sdk";
+import { assembleTransaction, Api } from "@stellar/stellar-sdk/rpc";
 
 // Mock account for simulations
 const createMockAccount = () =>
   new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0");
 
-// Convert address to proper format for Soroban
-// If already a G... address, return as-is. If hex, convert to G... address.
+// Normalize address to proper format
 function normalizeAddress(address: string): string {
-  // If it's already a G... address, return it directly
-  if (address.startsWith('G') && address.length === 56) {
+  if (address.startsWith("G") && address.length === 56) {
     return address;
   }
-  // Otherwise assume it's hex and convert
   try {
     const rawKey = Buffer.from(address, "hex");
     return StrKey.encodeEd25519PublicKey(rawKey);
   } catch {
-    // If conversion fails, return original (might already be correct format)
     return address;
   }
 }
@@ -55,7 +55,6 @@ export interface Campaign {
   withdrawn: boolean;
   active: boolean;
   createdAt: number;
-  capDonationsAtGoal?: boolean;
 }
 
 export interface Donation {
@@ -95,7 +94,7 @@ class TTLCache<T> {
   }
 }
 
-export class FundContractClient {
+class FundContractClient {
   private contractId: string;
   private server: rpc.Server;
   private cache = new TTLCache<any>();
@@ -103,13 +102,11 @@ export class FundContractClient {
 
   constructor(onProgress?: (progress: TxProgress) => void) {
     this.contractId = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
-    console.log('FundContractClient initialized with contract ID:', this.contractId);
     if (!this.contractId) {
       throw new Error("NEXT_PUBLIC_CONTRACT_ID not set");
     }
 
-    // Try alternative RPC endpoint for better testnet connectivity
-    this.server = new rpc.Server("https://soroban-testnet.stellar.org:443", {
+    this.server = new rpc.Server("https://soroban-testnet.stellar.org", {
       allowHttp: true,
     });
     this.onProgress = onProgress;
@@ -121,26 +118,35 @@ export class FundContractClient {
     }
   }
 
-  private async submitTx(ownerKey: string, xdr: string): Promise<string> {
+  private async submitTx(ownerKey: string, xdr: string, simResponse?: any): Promise<string> {
     try {
+      console.log('[ContractClient] submitTx called with ownerKey:', ownerKey);
+      console.log('[ContractClient] XDR length:', xdr.length);
+
       this.updateProgress({
         stage: "signing",
         message: "Waiting for wallet signature…",
       });
 
+      console.log('[ContractClient] Requesting wallet signature...');
       const { signedXdr } = await stellar.sign({
         xdr,
         publicKeys: [ownerKey],
         network: Networks.TESTNET,
       });
+      console.log('[ContractClient] Wallet signature received, signedXdr length:', signedXdr.length);
 
       this.updateProgress({
         stage: "submitting",
         message: "Broadcasting to network…",
       });
 
-      const tx = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET) as any;
-      const result = await this.server.sendTransaction(tx);
+      console.log('[ContractClient] Submitting transaction to network...');
+      // Parse the signed XDR to get the transaction
+      const txToSend = TransactionBuilder.fromXDR(signedXdr, Networks.TESTNET) as any;
+      console.log('[ContractClient] TX to send, source:', txToSend._source?._accountId?._value);
+      const result = await this.server.sendTransaction(txToSend);
+      console.log('[ContractClient] sendTransaction result:', JSON.stringify(result));
 
       this.updateProgress({
         stage: "confirming",
@@ -148,47 +154,66 @@ export class FundContractClient {
       });
 
       const hash = result.hash;
-      console.log('Transaction submitted, hash:', hash);
+      console.log('[ContractClient] Transaction submitted, hash:', hash);
       let attempts = 0;
-      const maxAttempts = 30; // Increased from 15 to 30 (60 seconds total)
+      const maxAttempts = 90; // 90 * 2000ms = 180 seconds (3 minutes)
+      const pollInterval = 2000;
 
       while (attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
         try {
           const txResult = await this.server.getTransaction(hash);
-          console.log(`Attempt ${attempts + 1}/${maxAttempts}: Transaction status:`, txResult.status);
-          console.log(`Contract ID: ${this.contractId}`);
+          console.log('[ContractClient] TX status:', txResult.status, 'attempt:', attempts + 1);
+
           if (txResult.status === "SUCCESS") {
             this.updateProgress({
               stage: "success",
               message: "Confirmed!",
               hash,
             });
+            console.log('[ContractClient] Transaction confirmed successfully');
             return hash;
           } else if (txResult.status === "FAILED") {
-            console.error('Transaction failed:', txResult);
-            throw new Error(`Transaction failed: ${txResult.resultXdr || 'No result XDR'}`);
+            const errorMsg = `Transaction failed: ${txResult.resultXdr}`;
+            console.error('[ContractClient] Transaction failed:', errorMsg);
+            throw new Error(errorMsg);
+          } else if (txResult.status === "NOT_FOUND") {
+            console.log('[ContractClient] Transaction not found yet, waiting...');
           }
-          // PENDING or other status - continue waiting
-          console.log('Transaction still pending, waiting...');
+          // PENDING - continue polling
         } catch (err) {
-          console.error('Error checking transaction status:', err);
+          console.error('[ContractClient] Error polling transaction:', err);
+          throw err;
         }
 
         attempts++;
       }
 
-      throw new Error(`Transaction confirmation timeout after ${maxAttempts * 2} seconds`);
+      console.error('[ContractClient] Transaction confirmation timed out after', maxAttempts * pollInterval / 1000, 'seconds');
+      throw new Error("Transaction confirmation timeout - the network may be slow. Please check the explorer for your transaction status.");
     } catch (error) {
+      console.error('[ContractClient] submitTx error:', error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
+      
+      let userMessage = errorMessage;
+      if (errorMessage.includes("contract")) {
+        userMessage = "Smart contract not found. Is it deployed?";
+      } else if (errorMessage.includes("auth")) {
+        userMessage = "Authentication required. Please connect your wallet.";
+      } else if (errorMessage.includes("balance")) {
+        userMessage = "Insufficient XLM balance for transaction.";
+      } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+        userMessage = "Network error. Please check your connection.";
+      }
+      
       this.updateProgress({
         stage: "error",
-        message: errorMessage,
+        message: userMessage,
         errorType: error instanceof Error ? error.constructor.name : "Error",
       });
-      throw error;
+      throw new Error(userMessage);
     }
   }
 
@@ -204,37 +229,83 @@ export class FundContractClient {
       message: "Building transaction…",
     });
 
-    const account = await this.server.getAccount(params.ownerKey);
-    const contract = new Contract(this.contractId);
-    const goalStroops = Math.round(params.goalXlm * 10_000_000);
+    try {
+      const normalizedOwner = normalizeAddress(params.ownerKey);
+      const contract = new Contract(this.contractId);
+      const goalStroops = Math.round(params.goalXlm * 10_000_000);
 
-    // Use ScInt for proper I128 encoding
-    const goalVal = new ScInt(goalStroops).toScVal();
+      console.log('[ContractClient] Creating campaign with goal:', goalStroops, 'stroops');
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(
-        contract.call(
-          "create_campaign",
-          Address.fromString(params.ownerKey).toScVal(),
-          xdr.ScVal.scvString(params.title),
-          xdr.ScVal.scvString(params.description),
-          goalVal,
-          xdr.ScVal.scvU32(params.durationDays)
+      // Step 1: Build transaction for simulation
+      const txForSim = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+        fee: BASE_FEE,
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          contract.call(
+            "create_campaign",
+            new Address(normalizedOwner).toScVal(),
+            xdr.ScVal.scvString(params.title),
+            xdr.ScVal.scvString(params.description),
+            new XdrLargeInt("i128", goalStroops).toI128(),
+            xdr.ScVal.scvU32(params.durationDays),
+          ),
         )
-      )
-      .setTimeout(30)
-      .build();
+        .setTimeout(300)
+        .build();
 
-    console.log('Transaction XDR:', tx.toXDR());
-    console.log('Contract ID:', this.contractId);
-    console.log('Owner:', params.ownerKey);
-    console.log('Parameters:', { title: params.title, goal: goalStroops, duration: params.durationDays });
+      // Step 2: Simulate to get proper fee and soroban data
+      console.log('[ContractClient] Simulating transaction...');
+      const simResponse = await this.server.simulateTransaction(txForSim) as any;
+      console.log('[ContractClient] Simulation response keys:', Object.keys(simResponse));
+      console.log('[ContractClient] Simulation minResourceFee:', simResponse.minResourceFee);
+      console.log('[ContractClient] Simulation transactionData:', !!simResponse.transactionData);
 
-    const txXdr = tx.toXDR();
-    return this.submitTx(params.ownerKey, txXdr);
+      // Check for simulation errors using SDK type guard
+      if (Api.isSimulationError(simResponse)) {
+        const errorMsg = simResponse.error || "Unknown simulation error";
+        console.error('[ContractClient] Simulation error:', errorMsg);
+        throw new Error(`Simulation failed: ${errorMsg}`);
+      }
+
+      // Step 3: Build final transaction using assembleTransaction
+      const minFee = simResponse.minResourceFee || BASE_FEE;
+
+      console.log('[ContractClient] Building final tx with minFee:', minFee);
+
+      const txForAssembly = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+        fee: String(minFee),
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          contract.call(
+            "create_campaign",
+            new Address(normalizedOwner).toScVal(),
+            xdr.ScVal.scvString(params.title),
+            xdr.ScVal.scvString(params.description),
+            new XdrLargeInt("i128", goalStroops).toI128(),
+            xdr.ScVal.scvU32(params.durationDays),
+          ),
+        )
+        .setTimeout(300)
+        .build();
+
+      console.log('[ContractClient] txForAssembly type:', typeof txForAssembly, txForAssembly?.constructor?.name);
+      const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
+      console.log('[ContractClient] assembledTxBuilder type:', typeof assembledTxBuilder, assembledTxBuilder?.constructor?.name);
+      const finalTx = assembledTxBuilder.build();
+      console.log('[ContractClient] finalTx type:', typeof finalTx, finalTx?.constructor?.name);
+      const txXdr = finalTx.toXDR();
+
+      console.log('[ContractClient] Submitting transaction...');
+      return this.submitTx(params.ownerKey, txXdr, simResponse);
+    } catch (error) {
+      throw new Error(
+        `Failed to create campaign: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      );
+    }
   }
 
   async recordDonation(params: {
@@ -248,31 +319,70 @@ export class FundContractClient {
       message: "Building transaction…",
     });
 
-    const account = await this.server.getAccount(params.donorKey);
-    const contract = new Contract(this.contractId);
-    const amountStroops = Math.round(params.amountXlm * 10_000_000);
+    try {
+      const normalizedDonor = normalizeAddress(params.donorKey);
+      const contract = new Contract(this.contractId);
+      const amountStroops = Math.round(params.amountXlm * 10_000_000);
 
-    // Use ScInt for proper I128 encoding
-    const amountVal = new ScInt(amountStroops).toScVal();
+      console.log('[ContractClient] Recording donation:', amountStroops, 'stroops to campaign:', params.campaignId);
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(
-        contract.call(
-          "donate",
-          new Address(normalizeAddress(params.donorKey)).toScVal(),
-          xdr.ScVal.scvU32(params.campaignId),
-          amountVal,
-          xdr.ScVal.scvString(params.message)
+      // Step 1: Build transaction for simulation
+      const txForSim = new TransactionBuilder(await this.server.getAccount(normalizedDonor), {
+        fee: BASE_FEE,
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          contract.call(
+            "donate",
+            new Address(normalizedDonor).toScVal(),
+            xdr.ScVal.scvU32(params.campaignId),
+            new XdrLargeInt("i128", amountStroops).toI128(),
+            xdr.ScVal.scvString(params.message),
+          ),
         )
-      )
-      .setTimeout(30)
-      .build();
+        .setTimeout(300)
+        .build();
 
-    const txXdr = tx.toXDR();
-    return this.submitTx(params.donorKey, txXdr);
+      // Step 2: Simulate to get proper fee and soroban data
+      console.log('[ContractClient] Simulating donation transaction...');
+      const simResponse = await this.server.simulateTransaction(txForSim) as any;
+      console.log('[ContractClient] Donation simulation response:', JSON.stringify(simResponse).substring(0, 500));
+
+      if (simResponse.error || simResponse.status === "error") {
+        throw new Error(`Simulation failed: ${simResponse.error?.message || simResponse.error || "Unknown error"}`);
+      }
+
+      // Step 3: Build final transaction using assembleTransaction
+      const minFee = simResponse.minResourceFee || BASE_FEE;
+
+      const txForAssembly = new TransactionBuilder(await this.server.getAccount(normalizedDonor), {
+        fee: String(minFee),
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          contract.call(
+            "donate",
+            new Address(normalizedDonor).toScVal(),
+            xdr.ScVal.scvU32(params.campaignId),
+            new XdrLargeInt("i128", amountStroops).toI128(),
+            xdr.ScVal.scvString(params.message),
+          ),
+        )
+        .setTimeout(300)
+        .build();
+
+      const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
+      const finalTx = assembledTxBuilder.build();
+      const txXdr = finalTx.toXDR();
+
+      return this.submitTx(params.donorKey, txXdr, simResponse);
+    } catch (error) {
+      throw new Error(
+        `Failed to record donation: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      );
+    }
   }
 
   async withdraw(ownerKey: string, campaignId: number): Promise<string> {
@@ -281,23 +391,56 @@ export class FundContractClient {
       message: "Building transaction…",
     });
 
-    const account = await this.server.getAccount(ownerKey);
-    const contract = new Contract(this.contractId);
+    try {
+      const normalizedOwner = normalizeAddress(ownerKey);
+      const contract = new Contract(this.contractId);
 
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(contract.call("withdraw", xdr.ScVal.scvU32(campaignId)))
-      .setTimeout(30)
-      .build();
+      console.log('[ContractClient] Withdrawing from campaign:', campaignId);
 
-    const txXdr = tx.toXDR();
-    return this.submitTx(ownerKey, txXdr);
+      // Step 1: Build transaction for simulation
+      const txForSim = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+        fee: BASE_FEE,
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(contract.call("withdraw", xdr.ScVal.scvU32(campaignId)))
+        .setTimeout(300)
+        .build();
+
+      // Step 2: Simulate to get proper fee and soroban data
+      console.log('[ContractClient] Simulating withdraw transaction...');
+      const simResponse = await this.server.simulateTransaction(txForSim) as any;
+
+      if (simResponse.error || simResponse.status === "error") {
+        throw new Error(`Simulation failed: ${simResponse.error?.message || simResponse.error || "Unknown error"}`);
+      }
+
+      // Step 3: Build final transaction using assembleTransaction
+      const minFee = simResponse.minResourceFee || BASE_FEE;
+
+      const txForAssembly = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+        fee: String(minFee),
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(contract.call("withdraw", xdr.ScVal.scvU32(campaignId)))
+        .setTimeout(300)
+        .build();
+
+      const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
+      const finalTx = assembledTxBuilder.build();
+      const txXdr = finalTx.toXDR();
+
+      return this.submitTx(ownerKey, txXdr, simResponse);
+    } catch (error) {
+      throw new Error(
+        `Failed to withdraw: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      );
+    }
   }
 
   async getAllCampaigns(
-    forceRefresh = false
+    forceRefresh = false,
   ): Promise<{ campaigns: Campaign[]; cached: boolean }> {
     const cacheKey = "campaigns:all";
 
@@ -308,80 +451,109 @@ export class FundContractClient {
       }
     }
 
-    const contract = new Contract(this.contractId);
-    const response = await this.server.simulateTransaction(
-      new TransactionBuilder(createMockAccount(), {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(contract.call("get_all_campaigns"))
-        .setTimeout(30)
-        .build()
-    );
+    try {
+      console.log('[ContractClient] Calling get_all_campaigns on contract:', this.contractId);
+      const contract = new Contract(this.contractId);
+      const result = await this.server.simulateTransaction(
+        new TransactionBuilder(createMockAccount(), {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(contract.call("get_all_campaigns"))
+          .setTimeout(TimeoutInfinite)
+          .build(),
+      ) as any;
+      console.log('[ContractClient] Raw simulation result:', JSON.stringify(result.result?.retval?._switch?.name));
+      console.log('[ContractClient] Result has retval:', !!result.result?.retval);
+      console.log('[ContractClient] Result _parsed:', result._parsed);
 
-    const campaigns = this.parseCampaignResponse(response as any);
-    this.cache.set(cacheKey, campaigns, 15000);
+      const campaigns = this.parseCampaignResponse(result as any);
+      console.log('[ContractClient] Parsed campaigns:', campaigns.length, campaigns);
+      this.cache.set(cacheKey, campaigns, 15000);
 
-    return { campaigns, cached: false };
+      return { campaigns, cached: false };
+    } catch (error) {
+      console.error("[ContractClient] Error fetching campaigns:", error);
+      return { campaigns: [], cached: false };
+    }
   }
 
   async getActiveCampaigns(): Promise<Campaign[]> {
-    const contract = new Contract(this.contractId);
-    const response = await this.server.simulateTransaction(
-      new TransactionBuilder(createMockAccount(), {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(contract.call("get_active_campaigns"))
-        .setTimeout(30)
-        .build()
-    );
+    try {
+      const contract = new Contract(this.contractId);
+      const result = await this.server.simulateTransaction(
+        new TransactionBuilder(createMockAccount(), {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+.addOperation(contract.call("get_active_campaigns"))
+          .setTimeout(TimeoutInfinite)
+          .build(),
+        );
 
-    return this.parseCampaignResponse(response as any);
+        return this.parseCampaignResponse(result as any);
+    } catch (error) {
+      console.error("Error fetching active campaigns:", error);
+      return [];
+    }
   }
 
   async getCampaign(id: number): Promise<Campaign> {
-    const contract = new Contract(this.contractId);
-    const response = await this.server.simulateTransaction(
-      new TransactionBuilder(createMockAccount(), {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(contract.call("get_campaign", xdr.ScVal.scvU32(id)))
-        .setTimeout(30)
-        .build()
-    );
+    try {
+      const contract = new Contract(this.contractId);
+      const result = await this.server.simulateTransaction(
+        new TransactionBuilder(createMockAccount(), {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(contract.call("get_campaign", xdr.ScVal.scvU32(id)))
+          .setTimeout(TimeoutInfinite)
+          .build(),
+      );
 
-    const campaigns = this.parseCampaignResponse(response as any);
-    if (campaigns.length === 0) {
-      throw new Error(`Campaign ${id} not found`);
+      const campaigns = this.parseCampaignResponse(result as any);
+      if (campaigns.length === 0) {
+        throw new Error(`Campaign ${id} not found`);
+      }
+      return campaigns[0];
+    } catch (error) {
+      throw new Error(
+        `Failed to get campaign: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      );
     }
-    return campaigns[0];
   }
 
   async getUserCampaigns(ownerKey: string): Promise<Campaign[]> {
-    const contract = new Contract(this.contractId);
-    const response = await this.server.simulateTransaction(
-      new TransactionBuilder(createMockAccount(), {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          contract.call(
-            "get_user_campaigns",
-            new Address(normalizeAddress(ownerKey)).toScVal()
+    try {
+      const normalizedOwner = normalizeAddress(ownerKey);
+      const contract = new Contract(this.contractId);
+      const result = await this.server.simulateTransaction(
+        new TransactionBuilder(createMockAccount(), {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(
+            contract.call(
+              "get_user_campaigns",
+              new Address(normalizedOwner).toScVal(),
+            ),
           )
-        )
-        .setTimeout(30)
-        .build()
-    );
+          .setTimeout(TimeoutInfinite)
+          .build(),
+      );
 
-    return this.parseCampaignResponse(response as any);
+      return this.parseCampaignResponse(result as any);
+    } catch (error) {
+      console.error("Error fetching user campaigns:", error);
+      return [];
+    }
   }
 
   async getDonations(
     campaignId: number,
-    forceRefresh = false
+    forceRefresh = false,
   ): Promise<{ donations: Donation[]; cached: boolean }> {
     const cacheKey = `donations:${campaignId}`;
 
@@ -392,45 +564,52 @@ export class FundContractClient {
       }
     }
 
-    const contract = new Contract(this.contractId);
-    const response = await this.server.simulateTransaction(
-      new TransactionBuilder(createMockAccount(), {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(contract.call("get_donations", xdr.ScVal.scvU32(campaignId)))
-        .setTimeout(30)
-        .build()
-    );
+    try {
+      const contract = new Contract(this.contractId);
+      const result = await this.server.simulateTransaction(
+        new TransactionBuilder(createMockAccount(), {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(
+            contract.call("get_donations", xdr.ScVal.scvU32(campaignId)),
+          )
+          .setTimeout(TimeoutInfinite)
+          .build(),
+      );
 
-    const donations = this.parseDonationResponse(response as any);
-    this.cache.set(cacheKey, donations, 20000);
+      const donations = this.parseDonationResponse(result as any);
+      this.cache.set(cacheKey, donations, 20000);
 
-    return { donations, cached: false };
+      return { donations, cached: false };
+    } catch (error) {
+      console.error("Error fetching donations:", error);
+      return { donations: [], cached: false };
+    }
   }
 
   async getCampaignCount(): Promise<number> {
-    const contract = new Contract(this.contractId);
-    const response = await this.server.simulateTransaction(
-      new TransactionBuilder(createMockAccount(), {
-        fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(contract.call("get_campaign_count"))
-        .setTimeout(30)
-        .build()
-    );
-
     try {
-      const result = (response as any).result?.retval;
-      if (result) {
-        const val = Number(result._value || 0);
-        return val;
+      const contract = new Contract(this.contractId);
+      const result = await this.server.simulateTransaction(
+        new TransactionBuilder(createMockAccount(), {
+          fee: BASE_FEE,
+          networkPassphrase: Networks.TESTNET,
+        })
+          .addOperation(contract.call("get_campaign_count"))
+          .setTimeout(TimeoutInfinite)
+          .build(),
+      );
+
+      const retval = (result as any).result?.retval;
+      if (retval) {
+        return Number(retval._value || 0);
       }
-    } catch {
-      // Ignore parsing errors
+      return 0;
+    } catch (error) {
+      console.error("Error fetching campaign count:", error);
+      return 0;
     }
-    return 0;
   }
 
   private parseCampaignResponse(response: any): Campaign[] {
@@ -439,32 +618,111 @@ export class FundContractClient {
       if (!result || !result._value) return [];
 
       const vec = Array.isArray(result._value) ? result._value : [];
-      return vec.map((item: any) => this.parseMapToCampaign(item)).filter(Boolean);
+      return vec
+        .map((item: any) => this.parseMapToCampaign(item))
+        .filter(Boolean) as Campaign[];
     } catch (error) {
       console.error("Error parsing campaigns:", error);
       return [];
     }
   }
 
+  private decodeScVal(val: any): any {
+    if (!val) return null;
+    const switchVal = val._switch?.name;
+    const armValue = val._arm;
+    const inner = val._value;
+
+    switch (switchVal) {
+      case "scvU32":
+        return Number(inner);
+      case "scvU64":
+        return Number(inner?._value || 0);
+      case "scvI128":
+        // i128 stored as { lo: u64, hi: i64 } in _value._attributes
+        const attrs = inner?._attributes;
+        if (attrs) {
+          const lo = BigInt(attrs.lo?._value || 0);
+          const hi = BigInt(attrs.hi?._value || 0);
+          // Convert i128 to Number (for display purposes)
+          if (hi === BigInt(0)) return Number(lo);
+          // Handle negative i128
+          const twosComplement = (hi << BigInt(64)) | lo;
+          const threshold = BigInt(1) << BigInt(127);
+          const signed = twosComplement >= threshold ? twosComplement - (BigInt(1) << BigInt(128)) : twosComplement;
+          return Number(signed);
+        }
+        return Number(inner || 0);
+      case "scvBool":
+        return Boolean(inner);
+      case "scvString":
+      case "scvSymbol":
+        // _value can be a Buffer directly or { data: Buffer }
+        if (Buffer.isBuffer(inner)) {
+          return inner.toString("utf8");
+        }
+        if (inner?.data && Buffer.isBuffer(inner.data)) {
+          return inner.data.toString("utf8");
+        }
+        return String(inner || "");
+      case "scvAddress":
+        if (inner?._value) {
+          // Address can be either contract or account
+          const addrValue = inner._value;
+          if (addrValue?._switch?.name === "scAddressTypeAccount") {
+            return addrValue._value?.accountId?._value?.value || "";
+          }
+          if (addrValue?._switch?.name === "scAddressTypeContract") {
+            return addrValue._value?.contractId?.toString("hex") || "";
+          }
+        }
+        return "";
+      default:
+        return null;
+    }
+  }
+
   private parseMapToCampaign(item: any): Campaign | null {
     try {
-      const mapData = item._attributes || {};
-      const getVal = (key: string) => {
-        const attr = mapData[key];
-        return attr?._value;
-      };
+      // The map entries are in _value as an array of { key: ScVal, val: ScVal }
+      const entries = item._value || [];
+      const fields: Record<string, any> = {};
+
+      for (const entry of entries) {
+        const keyVal = entry._attributes?.key;
+        const valVal = entry._attributes?.val;
+
+        if (!keyVal || !valVal) continue;
+
+        // Decode the key symbol
+        let keyName = "";
+        if (keyVal._switch?.name === "scvSymbol") {
+          const keyInner = keyVal._value;
+          if (Buffer.isBuffer(keyInner)) {
+            keyName = keyInner.toString("utf8");
+          } else if (keyInner?.data) {
+            keyName = Buffer.from(keyInner.data).toString("utf8");
+          }
+        }
+
+        // Decode the value based on type
+        const decodedVal = this.decodeScVal(valVal);
+        if (keyName) {
+          fields[keyName] = decodedVal;
+        }
+      }
 
       return {
-        id: Number(getVal("id") || 0),
-        owner: String(getVal("owner") || ""),
-        title: String(getVal("title") || ""),
-        description: String(getVal("description") || ""),
-        goal: Number(getVal("goal") || 0),
-        raised: Number(getVal("raised") || 0),
-        deadline: Number(getVal("deadline") || 0),
-        withdrawn: Boolean(getVal("withdrawn")),
-        active: Boolean(getVal("active")),
-        createdAt: Number(getVal("created_at") || 0),
+        id: fields.id ?? fields.id === 0 ? Number(fields.id) : 0,
+        owner: fields.owner ? String(fields.owner) : "",
+        title: fields.title ? String(fields.title) : "",
+        description: fields.description ? String(fields.description) : "",
+        goal: fields.goal ?? 0,
+        raised: fields.raised ?? 0,
+        deadline: fields.deadline ?? 0,
+        withdrawn: Boolean(fields.withdrawn),
+        active: Boolean(fields.active),
+        createdAt: fields.created_at ?? fields.createdAt ?? 0,
       };
     } catch {
       return null;
@@ -477,7 +735,9 @@ export class FundContractClient {
       if (!result || !result._value) return [];
 
       const vec = Array.isArray(result._value) ? result._value : [];
-      return vec.map((item: any) => this.parseMapToDonation(item)).filter(Boolean);
+      return vec
+        .map((item: any) => this.parseMapToDonation(item))
+        .filter(Boolean) as Donation[];
     } catch (error) {
       console.error("Error parsing donations:", error);
       return [];
@@ -486,18 +746,40 @@ export class FundContractClient {
 
   private parseMapToDonation(item: any): Donation | null {
     try {
-      const mapData = item._attributes || {};
-      const getVal = (key: string) => {
-        const attr = mapData[key];
-        return attr?._value;
-      };
+      // The map entries are in _value as an array of { key: ScVal, val: ScVal }
+      const entries = item._value || [];
+      const fields: Record<string, any> = {};
+
+      for (const entry of entries) {
+        const keyVal = entry._attributes?.key;
+        const valVal = entry._attributes?.val;
+
+        if (!keyVal || !valVal) continue;
+
+        // Decode the key symbol
+        let keyName = "";
+        if (keyVal._switch?.name === "scvSymbol") {
+          const keyInner = keyVal._value;
+          if (Buffer.isBuffer(keyInner)) {
+            keyName = keyInner.toString("utf8");
+          } else if (keyInner?.data) {
+            keyName = Buffer.from(keyInner.data).toString("utf8");
+          }
+        }
+
+        // Decode the value based on type
+        const decodedVal = this.decodeScVal(valVal);
+        if (keyName) {
+          fields[keyName] = decodedVal;
+        }
+      }
 
       return {
-        campaignId: Number(getVal("campaign_id") || 0),
-        donor: String(getVal("donor") || ""),
-        amount: Number(getVal("amount") || 0),
-        message: String(getVal("message") || ""),
-        timestamp: Number(getVal("timestamp") || 0),
+        campaignId: fields.campaign_id ?? 0,
+        donor: fields.donor ? String(fields.donor) : "",
+        amount: fields.amount ?? 0,
+        message: fields.message ? String(fields.message) : "",
+        timestamp: fields.timestamp ?? 0,
       };
     } catch {
       return null;
@@ -511,7 +793,7 @@ export class FundContractClient {
   getDaysLeft(campaign: Campaign): number {
     return Math.max(
       0,
-      Math.ceil((campaign.deadline - Date.now() / 1000) / 86400)
+      Math.ceil((campaign.deadline - Date.now() / 1000) / 86400),
     );
   }
 
@@ -523,3 +805,6 @@ export class FundContractClient {
 export function createFundClient(onProgress?: (progress: TxProgress) => void) {
   return new FundContractClient(onProgress);
 }
+
+// Export the client class for direct use
+export { FundContractClient };

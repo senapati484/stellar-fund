@@ -391,9 +391,9 @@ export function Input({
 }: InputProps) {
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-semibold text-textMain">
+      <label className="block text-sm font-semibold text-[#1a1a1a]">
         {label}
-        {required && <span className="text-error ml-1">*</span>}
+        {required && <span className="text-red-600 ml-1">*</span>}
       </label>
       <input
         type={type}
@@ -406,8 +406,8 @@ export function Input({
         maxLength={maxLength}
         className={`claude-input transition-all ${error ? "border-error focus:border-error focus:ring-error" : ""}`}
       />
-      {hint && !error && <p className="text-xs text-textMuted">{hint}</p>}
-      {error && <p className="text-xs text-error font-medium">{error}</p>}
+      {hint && !error && <p className="text-xs text-[#888888]">{hint}</p>}
+      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
   );
 }
@@ -438,9 +438,9 @@ export function Textarea({
 }: TextareaProps) {
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-semibold text-textMain">
+      <label className="block text-sm font-semibold text-[#1a1a1a]">
         {label}
-        {required && <span className="text-error ml-1">*</span>}
+        {required && <span className="text-red-600 ml-1">*</span>}
       </label>
       <textarea
         value={value}
@@ -451,16 +451,16 @@ export function Textarea({
         className={`claude-textarea transition-all ${error ? "border-error focus:border-error" : ""}`}
       />
       <div className="flex justify-between items-end">
-        {hint && !error && <p className="text-xs text-textMuted">{hint}</p>}
+        {hint && !error && <p className="text-xs text-[#888888]">{hint}</p>}
         {maxLength && (
           <p
-            className={`text-xs font-medium ${value.length > maxLength * 0.9 ? "text-error" : "text-textMuted"}`}
+            className={`text-xs font-medium ${value.length > maxLength * 0.9 ? "text-red-600" : "text-[#888888]"}`}
           >
             {value.length}/{maxLength}
           </p>
         )}
       </div>
-      {error && <p className="text-xs text-error font-medium">{error}</p>}
+      {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
   );
 }
@@ -507,14 +507,23 @@ export function Button({
     xl: "size-xl",
   };
 
+  const disabledClasses = disabled ? "opacity-60 cursor-not-allowed" : "";
+  const widthClasses = fullWidth ? "w-full" : "";
+  const cursorClasses = loading
+    ? "cursor-wait"
+    : !disabled
+      ? "cursor-pointer"
+      : "";
+
+  const combinedClassName =
+    `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${widthClasses} ${cursorClasses} ${disabledClasses} ${className || ""}`.trim();
+
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${
-        fullWidth ? "w-full" : ""
-      } ${loading ? "cursor-wait" : "cursor-pointer"} ${className || ""}`}
+      className={combinedClassName}
     >
       {loading ? (
         <LoadingSpinner
@@ -523,8 +532,8 @@ export function Button({
         />
       ) : (
         <>
-          {icon && <span className="flex-shrink-0">{icon}</span>}
-          <span className="flex-1">{children}</span>
+          {icon && <span className="inline-flex flex-shrink-0">{icon}</span>}
+          <span className="inline-flex">{children}</span>
         </>
       )}
     </button>

@@ -57,7 +57,7 @@ export default function DashboardPage() {
             </p>
             <button
               onClick={() => {}}
-              className="claude-button-primary px-8 py-3"
+              className="claude-button-primary px-4 py-2 rounded-lg"
             >
               Connect Wallet
             </button>

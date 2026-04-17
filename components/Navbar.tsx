@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useWallet } from './WalletProvider';
 import { Alert, Button, LoadingSpinner } from './ui';
-import { FaHome, FaPlus, FaUser } from 'react-icons/fa';
+import { FaHome, FaPlus, FaUser, FaStar } from 'react-icons/fa';
 import { stellar } from '@/lib/stellar-helper';
 
 export function Navbar() {
@@ -36,28 +36,30 @@ export function Navbar() {
   return (
     <>
       {/* Desktop Navbar */}
-      <nav className="hidden md:flex sticky top-0 h-[60px] bg-background/80 backdrop-blur-md border-b border-borderOuter items-center px-6 z-50">
-        {/* Logo */}
-        <div className="flex items-center gap-3 mr-8">
-          <div className="w-7 h-7 bg-textMain rounded-sm" />
-          <div>
-            <h1 className="font-serif font-medium text-lg text-textMain">StellarFund</h1>
-            <span className="text-[10px] font-mono text-textMuted">Testnet</span>
+      <nav className="hidden md:flex sticky top-0 h-[72px] bg-background/95 backdrop-blur-md border-b border-borderOuter items-center px-8 z-50">
+        {/* Logo Area - Improved spacing and design */}
+        <div className="flex items-center gap-3 mr-12">
+          <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center shadow-sm">
+            <FaStar className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <h1 className="font-serif font-medium text-xl text-textMain leading-tight">StellarFund</h1>
+            <span className="text-[10px] font-mono text-textMuted uppercase tracking-wide">Testnet</span>
           </div>
         </div>
 
-        {/* Nav Links */}
-        <div className="flex items-center gap-6">
+        {/* Nav Links - Better spacing */}
+        <div className="flex items-center gap-8">
           {navLinks.map((link) => {
             const isActive = pathname === link.path;
             return (
               <button
                 key={link.name}
                 onClick={() => router.push(link.path)}
-                className={`text-sm font-medium transition-colors px-1 py-1 ${
+                className={`text-sm font-medium transition-all px-2 py-2 rounded-md ${
                   isActive
-                    ? 'text-textMain border-b-2 border-primary'
-                    : 'text-textMuted hover:text-textMain'
+                    ? 'text-primary bg-primary/5'
+                    : 'text-textMuted hover:text-textMain hover:bg-surface'
                 }`}
               >
                 {link.name}
@@ -66,21 +68,21 @@ export function Navbar() {
           })}
         </div>
 
-        {/* Right Side */}
-        <div className="ml-auto flex items-center gap-3">
+        {/* Right Side - Better spacing */}
+        <div className="ml-auto flex items-center gap-4">
           {isConnected ? (
             <div className="flex items-center gap-3">
-              <div className="bg-surface border border-borderInner rounded-lg px-3 py-1.5">
+              <div className="bg-surface border border-borderInner rounded-lg px-4 py-2">
                 <span className="text-xs font-mono text-textMain">
                   {stellar.formatAddress(publicKey, 4, 4)}
                 </span>
               </div>
-              <Button onClick={handleDisconnect} variant="secondary" className="text-xs px-4 py-2">
+              <Button onClick={handleDisconnect} variant="secondary" className="text-sm px-5 py-2.5">
                 Disconnect
               </Button>
             </div>
           ) : (
-            <Button onClick={handleConnect} variant="primary" loading={isConnecting} className="px-4 py-2">
+            <Button onClick={handleConnect} variant="primary" loading={isConnecting} className="px-5 py-2.5">
               {isConnecting ? 'Connecting...' : 'Connect Wallet'}
             </Button>
           )}
@@ -88,14 +90,16 @@ export function Navbar() {
       </nav>
 
       {/* Mobile Top Bar */}
-      <nav className="md:hidden sticky top-0 h-[56px] bg-background/80 backdrop-blur-md border-b border-borderOuter items-center px-4 z-50">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-textMain rounded-sm" />
-            <div>
-              <h1 className="font-serif font-medium text-base text-textMain">StellarFund</h1>
-              <span className="text-[9px] font-mono text-textMuted">Testnet</span>
+      <nav className="md:hidden sticky top-0 h-[60px] bg-background/95 backdrop-blur-md border-b border-borderOuter items-center px-4 z-50">
+        <div className="flex items-center justify-between h-full">
+          {/* Logo - Improved spacing */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
+              <FaStar className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="font-serif font-medium text-base text-textMain leading-tight">StellarFund</h1>
+              <span className="text-[9px] font-mono text-textMuted uppercase tracking-wide">Testnet</span>
             </div>
           </div>
 

@@ -43,7 +43,7 @@ export default function DashboardPage() {
 
   const totalRaised = userCampaigns.reduce((sum, c) => sum + c.raised, 0);
   const activeCampaigns = userCampaigns.filter(c => c.active).length;
-  const totalDonors = userCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[c.id] || 0), 0);
+  const totalDonors = userCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[String(c.id)] || 0), 0);
 
   const handleWithdraw = async (campaignId: string) => {
     if (!publicKey) return;
@@ -55,7 +55,7 @@ export default function DashboardPage() {
       await client.withdraw(publicKey, campaignId);
       
       // Update local state
-      updateCampaign(campaignId as unknown as number, { withdrawn: true, active: false });
+      updateCampaign(campaignId, { withdrawn: true, active: false });
       alert('Funds withdrawn successfully!');
     } catch (error) {
       console.error('Failed to withdraw:', error);
@@ -189,7 +189,7 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {userCampaigns.map((campaign) => {
                     const progressPercent = Math.min(100, Math.round((campaign.raised / campaign.goal) * 100));
-                    const donorCount = campaignDonorCounts[campaign.id] || 0;
+                    const donorCount = campaignDonorCounts[String(campaign.id)] || 0;
                     const daysLeft = Math.max(0, Math.ceil((campaign.deadline - Date.now() / 1000) / 86400));
 
                     return (

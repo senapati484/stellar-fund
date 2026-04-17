@@ -10,7 +10,7 @@ export default function CreatePage() {
   const router = useRouter();
   const { publicKey, isConnected } = useWallet();
 
-  const handleSuccess = (id: number) => {
+  const handleSuccess = (id: string) => {
     router.push(`/campaign/${id}`);
   };
 

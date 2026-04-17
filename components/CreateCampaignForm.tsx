@@ -9,7 +9,7 @@ import { FaCheck } from "react-icons/fa";
 
 interface CreateCampaignFormProps {
   publicKey: string;
-  onSuccess: (campaignId: number) => void;
+  onSuccess: (campaignId: string) => void;
 }
 
 export function CreateCampaignForm({

@@ -55,9 +55,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   // Fetch campaigns from Supabase - shared across all users
   const refreshCampaigns = useCallback(async () => {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from(TABLES.CAMPAIGNS)
           .select('*')
           .order('created_at', { ascending: false });
@@ -135,9 +135,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
     };
 
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
-        const { error } = await supabase.from(TABLES.CAMPAIGNS).insert({
+        const { error } = await (supabase as any).from(TABLES.CAMPAIGNS).insert({
           id,
           title: newCampaign.title,
           description: newCampaign.description,
@@ -211,10 +211,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       timestamp: Math.floor(Date.now() / 1000),
     };
 
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
         // Add donation to Supabase
-        const { error: donationError } = await supabase.from(TABLES.DONATIONS).insert({
+        const { error: donationError } = await (supabase as any).from(TABLES.DONATIONS).insert({
           id: Date.now(),
           campaign_id: newDonation.campaignId,
           donor: newDonation.donor,
@@ -228,7 +228,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         // Update campaign raised amount
         const campaign = campaigns.find(c => c.id === donationData.campaignId);
         if (campaign) {
-          const { error: updateError } = await supabase
+          const { error: updateError } = await (supabase as any)
             .from(TABLES.CAMPAIGNS)
             .update({ raised: campaign.raised + donationData.amount })
             .eq('id', donationData.campaignId);
@@ -263,9 +263,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   };
 
   const getDonations = async (campaignId: number): Promise<Donation[]> => {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from(TABLES.DONATIONS)
           .select('*')
           .eq('campaign_id', campaignId)

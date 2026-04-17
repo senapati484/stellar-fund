@@ -33,15 +33,15 @@ function normalizeAddress(address: string): string {
   }
 }
 
-// Alternative: Use Address.fromString() for proper encoding
-function encodeAddress(address: string): string {
-  // Address.fromString() handles both G... and hex formats
+// Alternative: Use Address.fromString() directly without toString() roundtrip
+function encodeAddressToScVal(address: string) {
+  // Try Address.fromString() first (handles G... addresses)
   try {
-    const addr = Address.fromString(address);
-    return addr.toString();
+    return Address.fromString(address).toScVal();
   } catch {
     // Fallback to manual normalization
-    return normalizeAddress(address);
+    const normalized = normalizeAddress(address);
+    return Address.fromString(normalized).toScVal();
   }
 }
 
@@ -230,7 +230,7 @@ export class FundContractClient {
       .addOperation(
         contract.call(
           "create_campaign",
-          new Address(encodeAddress(params.ownerKey)).toScVal(),
+          encodeAddressToScVal(params.ownerKey),
           xdr.ScVal.scvString(params.title),
           xdr.ScVal.scvString(params.description),
           goalVal,

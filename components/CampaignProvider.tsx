@@ -107,8 +107,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       // Calculate duration from deadline
       const durationDays = Math.ceil((campaignData.deadline - Math.floor(Date.now() / 1000)) / (24 * 60 * 60));
 
-      // Create campaign on blockchain
-      await clientRef.current.createCampaign({
+      // Create campaign on blockchain and get the real campaign ID
+      const campaignId = await clientRef.current.createCampaign({
         ownerKey: campaignData.owner,
         title: campaignData.title,
         description: campaignData.description,
@@ -119,8 +119,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       // Refresh to get the new campaign from blockchain
       await refreshCampaigns();
 
-      // Return a generated ID (actual ID comes from blockchain)
-      return Date.now();
+      // Return the actual campaign ID from the blockchain (not a fake timestamp)
+      return campaignId;
     } catch (err) {
       console.error('Failed to create campaign on blockchain:', err);
       throw err;

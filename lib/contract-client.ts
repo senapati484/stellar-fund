@@ -14,7 +14,7 @@ import {
   TimeoutInfinite,
   XdrLargeInt,
 } from "@stellar/stellar-sdk";
-import { assembleTransaction, Api } from "@stellar/stellar-sdk/rpc";
+import { Api } from "@stellar/stellar-sdk/rpc";
 
 // Mock account for simulations
 const createMockAccount = () =>
@@ -41,7 +41,7 @@ export type TxProgress =
   | { stage: "signing"; message: "Waiting for wallet signature…" }
   | { stage: "submitting"; message: "Broadcasting to network…" }
   | { stage: "confirming"; message: "Confirming on-chain…" }
-  | { stage: "success"; message: "Confirmed!"; hash: string }
+  | { stage: "success"; message: string; hash: string }
   | { stage: "error"; message: string; errorType: string };
 
 export interface Campaign {
@@ -159,14 +159,17 @@ class FundContractClient {
       const maxAttempts = 90; // 90 * 2000ms = 180 seconds (3 minutes)
       const pollInterval = 2000;
 
+      // Use Horizon to poll for transaction status since Soroban RPC getTransaction has XDR parsing bugs in SDK v13
       while (attempts < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
         try {
-          const txResult = await this.server.getTransaction(hash);
-          console.log('[ContractClient] TX status:', txResult.status, 'attempt:', attempts + 1);
+          // Poll using Horizon API via fetch (avoids SDK's broken getTransaction XDR parsing)
+          const horizonUrl = "https://horizon-testnet.stellar.org";
+          const response = await fetch(`${horizonUrl}/transactions/${hash}?c=0`);
+          const txData = await response.json();
 
-          if (txResult.status === "SUCCESS") {
+          if (txData.successful === true) {
             this.updateProgress({
               stage: "success",
               message: "Confirmed!",
@@ -174,17 +177,18 @@ class FundContractClient {
             });
             console.log('[ContractClient] Transaction confirmed successfully');
             return hash;
-          } else if (txResult.status === "FAILED") {
-            const errorMsg = `Transaction failed: ${txResult.resultXdr}`;
+          } else if (txData.successful === false) {
+            const errorMsg = `Transaction failed: ${txData.result_xdr || 'unknown'}`;
             console.error('[ContractClient] Transaction failed:', errorMsg);
             throw new Error(errorMsg);
-          } else if (txResult.status === "NOT_FOUND") {
-            console.log('[ContractClient] Transaction not found yet, waiting...');
           }
-          // PENDING - continue polling
+          // NOT_FOUND (pending) - continue polling
+          console.log('[ContractClient] TX status: PENDING, attempt:', attempts + 1);
         } catch (err) {
-          console.error('[ContractClient] Error polling transaction:', err);
-          throw err;
+          if (err instanceof Error && err.message.includes('failed')) {
+            throw err;
+          }
+          console.warn(`[ContractClient] Error polling transaction (${attempts + 1}/${maxAttempts}):`, err.message);
         }
 
         attempts++;
@@ -223,7 +227,7 @@ class FundContractClient {
     description: string;
     goalXlm: number;
     durationDays: number;
-  }): Promise<string> {
+  }): Promise<number> {
     this.updateProgress({
       stage: "building",
       message: "Building transaction…",
@@ -269,34 +273,37 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${errorMsg}`);
       }
 
-      // Step 4: Assemble using txForSim (not rebuilding)
-      const minFee = simResponse.minResourceFee || BASE_FEE;
-      console.log('[ContractClient] Assembling final tx with minFee:', minFee);
+      // Step 4: Extract campaign ID from simulation result (the contract returns u32)
+      const createResult = simResponse.result?.retval;
+      let campaignId: number;
+      if (createResult?._switch?.name === 'scvU32') {
+        campaignId = Number(createResult._value);
+      } else {
+        // Fallback: use campaign count + 1
+        const countResult = await this.server.simulateTransaction(
+          new TransactionBuilder(account, {
+            fee: BASE_FEE,
+            networkPassphrase: Networks.TESTNET,
+          })
+            .addOperation(contract.call("get_campaign_count"))
+            .setTimeout(TimeoutInfinite)
+            .build(),
+        ) as any;
+        campaignId = Number(countResult.result?.retval?._value || 0);
+      }
+      console.log('[ContractClient] Campaign ID:', campaignId);
 
-      // Clone txForSim with proper fee then assemble
-      const txForAssembly = new TransactionBuilder(account, {
-        fee: String(minFee),
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          contract.call(
-            "create_campaign",
-            new Address(normalizedOwner).toScVal(),
-            xdr.ScVal.scvString(params.title),
-            xdr.ScVal.scvString(params.description),
-            new XdrLargeInt("i128", goalStroops).toI128(),
-            xdr.ScVal.scvU32(params.durationDays),
-          ),
-        )
-        .setTimeout(300)
-        .build();
-
-      const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
-      const finalTx = assembledTxBuilder.build();
-      const txXdr = finalTx.toXDR();
+      // Step 5: Assemble using prepareTransaction (handles all Soroban transaction assembly)
+      console.log('[ContractClient] Preparing final transaction...');
+      const preparedTx = await this.server.prepareTransaction(txForSim);
+      const txXdr = preparedTx.toXDR();
+      console.log('[ContractClient] txXDR type:', typeof txXdr, 'length:', txXdr?.length);
 
       console.log('[ContractClient] Submitting transaction...');
-      return this.submitTx(params.ownerKey, txXdr, simResponse);
+      await this.submitTx(params.ownerKey, txXdr, simResponse);
+
+      // Return the actual campaign ID from the contract
+      return campaignId;
     } catch (error) {
       throw new Error(
         `Failed to create campaign: ${
@@ -352,28 +359,10 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${simResponse.error?.message || simResponse.error || "Unknown error"}`);
       }
 
-      // Step 4: Build final transaction using assembleTransaction
-      const minFee = simResponse.minResourceFee || BASE_FEE;
-
-      const txForAssembly = new TransactionBuilder(account, {
-        fee: String(minFee),
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(
-          contract.call(
-            "donate",
-            new Address(normalizedDonor).toScVal(),
-            xdr.ScVal.scvU32(params.campaignId),
-            new XdrLargeInt("i128", amountStroops).toI128(),
-            xdr.ScVal.scvString(params.message),
-          ),
-        )
-        .setTimeout(300)
-        .build();
-
-      const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
-      const finalTx = assembledTxBuilder.build();
-      const txXdr = finalTx.toXDR();
+      // Step 4: Prepare final transaction using SDK's prepareTransaction
+      console.log('[ContractClient] Preparing final transaction...');
+      const preparedTx = await this.server.prepareTransaction(txForSim);
+      const txXdr = preparedTx.toXDR();
 
       return this.submitTx(params.donorKey, txXdr, simResponse);
     } catch (error) {
@@ -417,20 +406,10 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${simResponse.error?.message || simResponse.error || "Unknown error"}`);
       }
 
-      // Step 4: Build final transaction using assembleTransaction
-      const minFee = simResponse.minResourceFee || BASE_FEE;
-
-      const txForAssembly = new TransactionBuilder(account, {
-        fee: String(minFee),
-        networkPassphrase: Networks.TESTNET,
-      })
-        .addOperation(contract.call("withdraw", xdr.ScVal.scvU32(campaignId)))
-        .setTimeout(300)
-        .build();
-
-      const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
-      const finalTx = assembledTxBuilder.build();
-      const txXdr = finalTx.toXDR();
+      // Step 4: Prepare final transaction using SDK's prepareTransaction
+      console.log('[ContractClient] Preparing final transaction...');
+      const preparedTx = await this.server.prepareTransaction(txForSim);
+      const txXdr = preparedTx.toXDR();
 
       return this.submitTx(ownerKey, txXdr, simResponse);
     } catch (error) {
@@ -514,11 +493,11 @@ class FundContractClient {
           .build(),
       );
 
-      const campaigns = this.parseCampaignResponse(result as any);
-      if (campaigns.length === 0) {
+      const campaign = this.parseSingleCampaignResponse(result as any);
+      if (!campaign) {
         throw new Error(`Campaign ${id} not found`);
       }
-      return campaigns[0];
+      return campaign;
     } catch (error) {
       throw new Error(
         `Failed to get campaign: ${
@@ -615,15 +594,50 @@ class FundContractClient {
     }
   }
 
+  private parseSingleCampaignResponse(response: any): Campaign | null {
+    try {
+      const result = response.result?.retval;
+      if (!result) {
+        console.log('[ContractClient] parseSingleCampaignResponse: no result');
+        return null;
+      }
+
+      console.log('[ContractClient] parseSingleCampaignResponse: result._switch:', result._switch?.name);
+      console.log('[ContractClient] parseSingleCampaignResponse: result._value keys:', result._value ? Object.keys(result._value) : 'none');
+
+      // Single Campaign struct - _value contains the map entries directly
+      // The structure is: { _switch: { name: "scvMap" }, _value: [{ key: ScVal, val: ScVal }] }
+      if (result._switch?.name === "scvMap") {
+        const campaign = this.parseMapToCampaign(result);
+        console.log('[ContractClient] parseSingleCampaignResponse: parsed campaign:', campaign);
+        return campaign;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error parsing single campaign:", error);
+      return null;
+    }
+  }
+
   private parseCampaignResponse(response: any): Campaign[] {
     try {
       const result = response.result?.retval;
-      if (!result || !result._value) return [];
+      if (!result || !result._value) {
+        console.log('[ContractClient] parseCampaignResponse: no result or _value');
+        return [];
+      }
 
       const vec = Array.isArray(result._value) ? result._value : [];
-      return vec
-        .map((item: any) => this.parseMapToCampaign(item))
+      console.log('[ContractClient] parseCampaignResponse: vec length:', vec.length);
+      const campaigns = vec
+        .map((item: any, idx: number) => {
+          const parsed = this.parseMapToCampaign(item);
+          console.log(`[ContractClient] parseCampaignResponse[${idx}]:`, parsed?.id, 'owner:', parsed?.owner?.slice(0, 8));
+          return parsed;
+        })
         .filter(Boolean) as Campaign[];
+      return campaigns;
     } catch (error) {
       console.error("Error parsing campaigns:", error);
       return [];
@@ -669,14 +683,21 @@ class FundContractClient {
         }
         return String(inner || "");
       case "scvAddress":
-        if (inner?._value) {
-          // Address can be either contract or account
-          const addrValue = inner._value;
-          if (addrValue?._switch?.name === "scAddressTypeAccount") {
-            return addrValue._value?.accountId?._value?.value || "";
+        // ScAddress structure from parsed XDR (different from constructed ScAddress):
+        // { _switch: { name: "scAddressTypeAccount" }, _arm: "accountId", _value: { _value: Buffer (raw 32 bytes) } }
+        const addrInner = val._value;
+        if (addrInner?._switch?.name === "scAddressTypeAccount") {
+          // Raw bytes are at _value._value in parsed XDR
+          const rawBytes = addrInner._value?._value;
+          if (Buffer.isBuffer(rawBytes) && rawBytes.length === 32) {
+            return StrKey.encodeEd25519PublicKey(rawBytes);
           }
-          if (addrValue?._switch?.name === "scAddressTypeContract") {
-            return addrValue._value?.contractId?.toString("hex") || "";
+        }
+        if (addrInner?._switch?.name === "scAddressTypeContract") {
+          // Contract address: _value is { contractId: Buffer }
+          const contractId = addrInner._value?.contractId;
+          if (Buffer.isBuffer(contractId)) {
+            return StrKey.encodeContract(contractId);
           }
         }
         return "";
@@ -720,8 +741,9 @@ class FundContractClient {
         owner: fields.owner ? String(fields.owner) : "",
         title: fields.title ? String(fields.title) : "",
         description: fields.description ? String(fields.description) : "",
-        goal: fields.goal ?? 0,
-        raised: fields.raised ?? 0,
+        // Convert from stroops (10^7) to XLM for display
+        goal: (fields.goal ?? 0) / 10_000_000,
+        raised: (fields.raised ?? 0) / 10_000_000,
         deadline: fields.deadline ?? 0,
         withdrawn: Boolean(fields.withdrawn),
         active: Boolean(fields.active),
@@ -780,7 +802,8 @@ class FundContractClient {
       return {
         campaignId: fields.campaign_id ?? 0,
         donor: fields.donor ? String(fields.donor) : "",
-        amount: fields.amount ?? 0,
+        // Convert from stroops (10^7) to XLM for display
+        amount: (fields.amount ?? 0) / 10_000_000,
         message: fields.message ? String(fields.message) : "",
         timestamp: fields.timestamp ?? 0,
       };

@@ -1,133 +1,146 @@
 # Stellar Fund - Error Report
 
+Created: 2026-04-17
+
 ## Summary
 
-The Stellar Fund application (Soroban smart contract crowdfunding dapp) has multiple unresolved issues affecting campaign creation, donation functionality, and data display.
+The Stellar Fund application (Soroban smart contract crowdfunding dapp) has multiple issues affecting campaign creation, donation functionality, and data display.
 
 ---
 
-## Issue 1: Transaction Confirmation Fails with XDR Parse Error
+## Issue 1: Transaction Confirmation - SDK XDR Parsing Bug
 
-**Error:** `Bad union switch: 4` - SDK's `getTransaction()` cannot parse Soroban transaction results
+**Status:** FIXED (using Horizon API directly)
 
-**Location:** `lib/contract-client.ts:194` (submitTx function)
+**Original Error:** `Bad union switch: 4` - SDK's `getTransaction()` cannot parse Soroban transaction results
 
-**Description:** When polling for transaction confirmation using `this.server.getTransaction(hash)`, the SDK throws an XDR parsing error because it cannot handle the Soroban-specific transaction result envelope. After 5 failures, the code treats the transaction as submitted but cannot confirm it.
+**Solution Applied:** Replaced `this.server.getTransaction(hash)` with direct Horizon API polling via `fetch('https://horizon-testnet.stellar.org/transactions/{hash}')`
 
-**Code Section:**
-```typescript
-// lib/contract-client.ts line 168-209
-while (attempts < maxAttempts) {
-  await new Promise((resolve) => setTimeout(resolve, pollInterval));
-  try {
-    const txResult = await this.server.getTransaction(hash);  // <-- FAILS HERE
-    // ...
-  } catch (err) {
-    const isXdrParsingError = err instanceof TypeError && String(err).includes("union switch");
-    if (isXdrParsingError) {
-      xdrErrorCount++;
-      console.warn(`[ContractClient] SDK XDR parse error (${xdrErrorCount}/${maxXdrErrors}):`, err.message);
-      if (xdrErrorCount >= maxXdrErrors) {
-        // Treat as submitted but can't confirm
-      }
-    }
-  }
-}
-```
-
-**Console Error:**
-```
-[ContractClient] SDK XDR parse error (1/5): Bad union switch: 4
-```
+**Location:** `lib/contract-client.ts:162-195`
 
 ---
 
-## Issue 2: Campaign Owner Field Empty When Parsed
+## Issue 2: Horizon API Polling Not Detecting Success Properly
 
-**Symptom:** Campaign ID 8, 9 show owner as "GD2W7IXU" (truncated) instead of full address
+**Symptom:** Transaction confirmed on-chain (verified via Horizon API) but confirmation loop still times out
 
-**Location:** `lib/contract-client.ts:795` (parseCampaignResponse function)
+**Expected:** When `txData.successful === true`, the loop should return success
 
-**Description:** When parsing campaign data from `get_all_campaigns`, the owner address appears truncated or empty in some cases.
+**Actual:** The confirmation still fails
 
-**Code Section:**
-```typescript
-// lib/contract-client.ts line 795
-Desktop_Dev_stellar_stellar-fund_0p14ofd._.js:795 [ContractClient] parseCampaignResponse[8]: 8 owner: GD2W7IXU
-Desktop_Dev_stellar_stellar-fund_0p14ofd._.js:795 [ContractClient] parseCampaignResponse[9]: 9 owner: GD2W7IXU
-// Expected: Full 56-character address like GD2W7IXUIQTDZXF3OAXOO7BTEEN6XS4RY7CFRSU543U2Y5C5DZ33ZTK5
-```
+**Investigation Needed:** The Horizon API response shows `"successful": true` for transaction `754bb063b00fc16600ecd4e07306e0bea0ffc62f68dbe9cb7e3754bbf644c620` but the app still shows timeout
 
 ---
 
-## Issue 3: Donation Functionality Not Working
+## Issue 3: Campaign Owner Field Truncated
+
+**Symptom:** Campaign ID 8, 9 show owner as "GD2W7IXU" (8 chars) instead of full 56-char address
+
+**Expected:** Full address like `GD2W7IXUIQTDZXF3OAXOO7BTEEN6XS4RY7CFRSU543U2Y5C5DZ33ZTK5`
+
+**Location:** `lib/contract-client.ts:636` - parseCampaignResponse logging
+
+**Console Output:**
+```
+parseCampaignResponse[8]: 8 owner: GD2W7IXU
+parseCampaignResponse[9]: 9 owner: GD2W7IXU
+```
+
+**Possible Cause:** The `decodeScVal` function for `scvAddress` type may not be extracting raw bytes correctly from parsed XDR structure
+
+---
+
+## Issue 4: Donation Functionality Not Working
 
 **Symptom:** User cannot donate to campaigns - no error but donation doesn't register
 
-**Location:** Likely in `lib/contract-client.ts` - `donateToCampaign` function
+**Location:** `lib/contract-client.ts:316-375` - `recordDonation` function
 
-**Related:** Transaction submission works but confirmation fails, so donations may be submitted but not confirmed on-chain.
+**Related Functions:**
+- Uses `this.server.sendTransaction()` to broadcast
+- Uses same `submitTx()` for confirmation
+- Donation data stored in contract via `donate` function
 
 ---
 
-## Issue 4: Campaign Amount/Goal Display Incorrect
+## Issue 5: Campaign Amount/Goal Display Incorrect
 
 **Symptom:** Campaign shows wrong goal amount (e.g., 0 instead of actual value)
 
-**Location:** `components/CampaignProvider.tsx` or parsing of campaign data
+**Location:** Campaign parsing in `lib/contract-client.ts:739-751`
 
-**Description:** The goalXlm value appears incorrect when campaigns are displayed. The simulation returns `scvU32` with value `3` or `8` which may be misinterpretation.
+**Code:**
+```typescript
+return {
+  id: fields.id ?? fields.id === 0 ? Number(fields.id) : 0,
+  owner: fields.owner ? String(fields.owner) : "",
+  // Convert from stroops (10^7) to XLM for display
+  goal: (fields.goal ?? 0) / 10_000_000,
+  raised: (fields.raised ?? 0) / 10_000_000,
+  // ...
+};
+```
+
+**Possible Cause:** Field names mismatch between contract and parsing code
 
 ---
 
-## Issue 5: Simulation Returns Unexpected Result Type
+## Issue 6: get_all_campaigns Returns More Campaigns Than Expected
 
-**Log:**
+**Symptom:** `get_all_campaigns` returns 10 campaigns when only ~5 were explicitly created
+
+**Console Output:**
 ```
-contract-client.ts:295 [ContractClient] createResult: {
-  "_switch": { "name": "scvU32", "value": 3 },
-  "_arm": "u32",
-  "_value": 8
+parseCampaignResponse: vec length: 10
+parseCampaignResponse[0]: 0 owner: GBIF3PP7
+parseCampaignResponse[8]: 8 owner: GD2W7IXU
+parseCampaignResponse[9]: 9 owner: GD2W7IXU
+```
+
+**Possible Cause:** Contract may be returning uninitialized/default campaigns
+
+---
+
+## Code Sections Needing Investigation
+
+### 1. Transaction Confirmation Loop
+```typescript
+// lib/contract-client.ts:162-195
+// Uses Horizon API - needs verification that response is being processed correctly
+const response = await fetch(`${horizonUrl}/transactions/${hash}?c=0`);
+const txData = await response.json();
+
+if (txData.successful === true) {
+  // Should return success
+} else if (txData.successful === false) {
+  // Should throw error
 }
-contract-client.ts:305 [ContractClient] Campaign ID from simulation: 8
+// If pending, continues loop
 ```
 
-**Location:** `lib/contract-client.ts:290-310`
-
-**Description:** The simulation result for `create_campaign` returns a u32 (campaign ID) but the code treats it correctly. However, this pattern suggests the contract's return type may not be properly defined in the SDK.
-
----
-
-## Issue 6: Transaction Status "NOT_FOUND" Despite Successful Broadcast
-
-**Log:**
-```
-[ContractClient] sendTransaction result: {"status":"PENDING","hash":"...","latestLedger":2084273}
-[ContractClient] TX status: NOT_FOUND attempt: 1
-[ContractClient] Transaction not found yet, waiting...
+### 2. Address Decoding for Campaign Owner
+```typescript
+// lib/contract-client.ts:685-703 - decodeScVal for scvAddress
+case "scvAddress":
+  const addrInner = val._value;
+  if (addrInner?.switch?.name === "scAddressTypeAccount") {
+    const rawBytes = addrInner._value?._value;
+    if (Buffer.isBuffer(rawBytes) && rawBytes.length === 32) {
+      return StrKey.encodeEd25519PublicKey(rawBytes);
+    }
+  }
 ```
 
-**Location:** `lib/contract-client.ts:168` (getTransaction polling)
-
-**Description:** Transaction is successfully broadcast (PENDING) but `getTransaction` returns NOT_FOUND. This happens even with valid transactions because of the XDR parsing bug in SDK v13.
-
----
-
-## Root Cause Analysis
-
-### Primary Issue: Stellar SDK v13 Bug
-
-The `@stellar/stellar-sdk` v13.3.0 has a known bug where `getTransaction()` fails to parse Soroban transaction results. The error `"Bad union switch: 4"` occurs because:
-
-1. Soroban transactions use a different result envelope than classic Stellar transactions
-2. The SDK's XDR parsing code encounters an unexpected union switch value (4 instead of expected 0-3)
-3. This affects every poll, causing all transactions to appear to fail
-
-### Evidence from Logs
-
-- Transaction hash `0cf47758e788fb9babb329991a4aadda41024b20246af63f6ae058ec8630bce7` was broadcast and returned PENDING
-- Campaign ID 8 was created successfully (visible in subsequent `get_all_campaigns` calls)
-- But confirmation polling failed with XDR parse errors
+### 3. Campaign Parsing
+```typescript
+// lib/contract-client.ts:709-755 - parseMapToCampaign
+const entries = item._value || [];
+for (const entry of entries) {
+  const keyVal = entry._attributes?.key;
+  const valVal = entry._attributes?.val;
+  // Decodes based on type, stores in fields{}
+}
+```
 
 ---
 
@@ -135,7 +148,7 @@ The `@stellar/stellar-sdk` v13.3.0 has a known bug where `getTransaction()` fail
 
 | File | Purpose |
 |------|---------|
-| `lib/contract-client.ts` | Main contract interaction - submitTx, createCampaign, donateToCampaign |
+| `lib/contract-client.ts` | Main contract interaction - submitTx, createCampaign, recordDonation |
 | `components/CampaignProvider.tsx` | React context for campaign state management |
 | `components/CreateCampaignForm.tsx` | Form for creating new campaigns |
 | `app/campaign/[id]/page.tsx` | Campaign detail page |
@@ -156,19 +169,10 @@ The `@stellar/stellar-sdk` v13.3.0 has a known bug where `getTransaction()` fail
 
 ---
 
-## Suggested Fix Approach
-
-1. **Replace `getTransaction()` polling** with Horizon API direct fetch to avoid SDK's broken XDR parsing
-2. **Check contract return type** - verify `create_campaign` returns correct type
-3. **Add campaign data validation** to handle malformed owner addresses
-4. **Test donation flow end-to-end** to identify where it breaks
-5. **Verify Soroban RPC endpoint** - ensure using correct testnet URL
-
----
-
 ## Questions for Further Investigation
 
 1. Is the contract deployed with correct WASM and correct network?
 2. Does `create_campaign` function actually return the campaign ID as u32?
 3. Is there a mismatch between contract function signatures and SDK type definitions?
-4. Why does `get_all_campaigns` return 10 campaigns when only some were explicitly created?
+4. What are the actual field names in the Campaign struct in the contract?
+5. Why does the Horizon API return successful for confirmed transactions but the loop doesn't detect it?

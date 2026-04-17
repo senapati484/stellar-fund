@@ -23,7 +23,7 @@ export default function DashboardPage() {
   // Load donor counts asynchronously
   useEffect(() => {
     const loadDonorCounts = async () => {
-      const counts: Record<number, number> = {};
+      const counts: Record<string, number> = {};
       for (const campaign of userCampaigns) {
         try {
           const donations = await getDonations(campaign.id);
@@ -45,7 +45,7 @@ export default function DashboardPage() {
   const activeCampaigns = userCampaigns.filter(c => c.active).length;
   const totalDonors = userCampaigns.reduce((sum, c) => sum + (campaignDonorCounts[c.id] || 0), 0);
 
-  const handleWithdraw = async (campaignId: number) => {
+  const handleWithdraw = async (campaignId: string) => {
     if (!publicKey) return;
     try {
       const { FundContractClient } = await import('@/lib/contract-client');
@@ -55,7 +55,7 @@ export default function DashboardPage() {
       await client.withdraw(publicKey, campaignId);
       
       // Update local state
-      updateCampaign(campaignId, { withdrawn: true, active: false });
+      updateCampaign(campaignId as unknown as number, { withdrawn: true, active: false });
       alert('Funds withdrawn successfully!');
     } catch (error) {
       console.error('Failed to withdraw:', error);

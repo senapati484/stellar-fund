@@ -367,7 +367,7 @@ class FundContractClient {
     }
   }
 
-  async withdraw(ownerKey: string, campaignId: number): Promise<string> {
+  async withdraw(ownerKey: string, campaignId: string | number): Promise<string> {
     this.updateProgress({
       stage: "building",
       message: "Building transaction…",

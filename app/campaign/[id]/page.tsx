@@ -22,7 +22,7 @@ export default function CampaignPage() {
 
   console.log('Campaign page - id:', id, 'campaigns:', campaigns);
 
-  const campaign = id ? campaigns.find(c => c.id === parseInt(id)) : undefined;
+  const campaign = id ? campaigns.find(c => String(c.id) === id) : undefined;
 
   // Load donations when campaign changes
   useEffect(() => {

@@ -33,6 +33,18 @@ function normalizeAddress(address: string): string {
   }
 }
 
+// Alternative: Use Address.fromString() for proper encoding
+function encodeAddress(address: string): string {
+  // Address.fromString() handles both G... and hex formats
+  try {
+    const addr = Address.fromString(address);
+    return addr.toString();
+  } catch {
+    // Fallback to manual normalization
+    return normalizeAddress(address);
+  }
+}
+
 import { stellar } from "./stellar-helper";
 
 export type TxProgress =
@@ -218,7 +230,7 @@ export class FundContractClient {
       .addOperation(
         contract.call(
           "create_campaign",
-          new Address(normalizeAddress(params.ownerKey)).toScVal(),
+          new Address(encodeAddress(params.ownerKey)).toScVal(),
           xdr.ScVal.scvString(params.title),
           xdr.ScVal.scvString(params.description),
           goalVal,
@@ -227,6 +239,24 @@ export class FundContractClient {
       )
       .setTimeout(30)
       .build();
+
+    // Simulate transaction before submission to catch errors early
+    try {
+      const simulation = await this.server.simulateTransaction(tx);
+      console.log('Transaction simulation result:', simulation);
+      // Check if simulation has error status
+      if ('error' in simulation) {
+        throw new Error(`Simulation failed: ${simulation.error}`);
+      }
+    } catch (simError) {
+      console.error('Simulation error:', simError);
+      this.updateProgress({
+        stage: 'error',
+        message: 'Transaction simulation failed',
+        errorType: 'SimulationError'
+      });
+      throw new Error(`Simulation failed: ${simError instanceof Error ? simError.message : 'Unknown error'}`);
+    }
 
     const txXdr = tx.toXDR();
     return this.submitTx(params.ownerKey, txXdr);

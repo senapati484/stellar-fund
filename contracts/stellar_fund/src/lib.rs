@@ -111,12 +111,15 @@ impl StellarFund {
         goal: i128,
         duration_days: u32,
     ) -> u32 {
+        env.events().publish(("debug",), ("create_campaign_start",));
         owner.require_auth();
+        env.events().publish(("debug",), ("auth_passed",));
         let id: u32 = env
             .storage()
             .instance()
             .get(&key_campaign_count())
             .unwrap_or(0);
+        env.events().publish(("debug",), ("campaign_id", id));
         let deadline = env.ledger().timestamp() + (duration_days as u64) * 86400;
         let campaign = Campaign {
             id,
@@ -130,14 +133,17 @@ impl StellarFund {
             active: true,
             created_at: env.ledger().timestamp(),
         };
+        env.events().publish(("debug",), ("storing_campaign",));
         env.storage()
             .instance()
             .set(&key_campaign(&env, id), &campaign);
+        env.events().publish(("debug",), ("incrementing_count",));
         env.storage()
             .instance()
             .set(&key_campaign_count(), &(id + 1));
         env.events()
             .publish(("campaign_created",), (id, owner, goal));
+        env.events().publish(("debug",), ("create_campaign_success",));
         id
     }
 

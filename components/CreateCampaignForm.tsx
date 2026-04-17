@@ -87,26 +87,6 @@ export function CreateCampaignForm({
 
   const handleSubmit = async () => {
     try {
-      setProgress({ stage: "building", message: "Building transaction…" });
-
-      // Small UX delays so users see progress steps
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      setProgress({
-        stage: "signing",
-        message: "Waiting for wallet signature…",
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      setProgress({ stage: "submitting", message: "Broadcasting to network…" });
-
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      setProgress({ stage: "confirming", message: "Confirming on-chain…" });
-
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
       const duration = parseInt(durationDays);
       const deadline = Math.floor(Date.now() / 1000) + duration * 24 * 60 * 60;
 

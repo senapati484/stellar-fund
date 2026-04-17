@@ -228,6 +228,11 @@ export class FundContractClient {
       .setTimeout(30)
       .build();
 
+    console.log('Transaction XDR:', tx.toXDR());
+    console.log('Contract ID:', this.contractId);
+    console.log('Owner:', params.ownerKey);
+    console.log('Parameters:', { title: params.title, goal: goalStroops, duration: params.durationDays });
+
     const txXdr = tx.toXDR();
     return this.submitTx(params.ownerKey, txXdr);
   }

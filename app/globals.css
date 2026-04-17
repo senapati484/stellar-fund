@@ -637,59 +637,6 @@ a:focus-visible {
     }
 }
 
-/* ==================== Dark Mode Support (if needed) ==================== */
-@media (prefers-color-scheme: dark) {
-    html,
-    body {
-        background: var(--color-dark);
-        color: #f0f0f0;
-    }
-
-    .claude-card,
-    .claude-card-elevated {
-        background: var(--color-medium-dark);
-        border-color: var(--color-dark);
-    }
-
-    .claude-button-secondary {
-        background: var(--color-medium-dark);
-        border-color: var(--color-dark);
-        color: #f0f0f0;
-    }
-
-    .claude-button-secondary:hover:not(:disabled) {
-        background: #3a3a3a;
-        border-color: var(--color-medium);
-    }
-
-    .claude-input,
-    .claude-textarea,
-    .claude-input-base {
-        background: var(--color-medium-dark);
-        color: #f0f0f0;
-        border-color: var(--color-dark);
-    }
-
-    .claude-input::placeholder,
-    .claude-textarea::placeholder,
-    .claude-input-base::placeholder {
-        color: var(--color-light);
-    }
-
-    p {
-        color: var(--color-lighter);
-    }
-
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-        color: #f0f0f0;
-    }
-}
-
 /* ==================== Accessibility ==================== */
 @media (prefers-reduced-motion: reduce) {
     * {

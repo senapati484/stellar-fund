@@ -228,35 +228,6 @@ export class FundContractClient {
       .setTimeout(30)
       .build();
 
-    // Log XDR for debugging
-    console.log('Transaction XDR:', tx.toXDR());
-    console.log('Owner key:', params.ownerKey);
-    console.log('Title:', params.title);
-    console.log('Description:', params.description);
-    console.log('Goal XLM:', params.goalXlm);
-    console.log('Goal Stroops:', goalStroops);
-    console.log('Duration Days:', params.durationDays);
-    console.log('Goal Val type:', goalVal);
-    console.log('Address type:', Address.fromString(params.ownerKey).toScVal());
-
-    // Simulate transaction before submission to catch errors early
-    try {
-      const simulation = await this.server.simulateTransaction(tx);
-      console.log('Transaction simulation result:', simulation);
-      // Check if simulation has error status
-      if ('error' in simulation) {
-        throw new Error(`Simulation failed: ${simulation.error}`);
-      }
-    } catch (simError) {
-      console.error('Simulation error:', simError);
-      this.updateProgress({
-        stage: 'error',
-        message: 'Transaction simulation failed',
-        errorType: 'SimulationError'
-      });
-      throw new Error(`Simulation failed: ${simError instanceof Error ? simError.message : 'Unknown error'}`);
-    }
-
     const txXdr = tx.toXDR();
     return this.submitTx(params.ownerKey, txXdr);
   }

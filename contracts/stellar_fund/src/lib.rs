@@ -52,9 +52,29 @@ fn key_campaign(_env: &Env, id: u32) -> String {
         String::from_str(_env, "c8")
     } else if id == 9 {
         String::from_str(_env, "c9")
+    } else if id == 10 {
+        String::from_str(_env, "c10")
+    } else if id == 11 {
+        String::from_str(_env, "c11")
+    } else if id == 12 {
+        String::from_str(_env, "c12")
+    } else if id == 13 {
+        String::from_str(_env, "c13")
+    } else if id == 14 {
+        String::from_str(_env, "c14")
+    } else if id == 15 {
+        String::from_str(_env, "c15")
+    } else if id == 16 {
+        String::from_str(_env, "c16")
+    } else if id == 17 {
+        String::from_str(_env, "c17")
+    } else if id == 18 {
+        String::from_str(_env, "c18")
+    } else if id == 19 {
+        String::from_str(_env, "c19")
     } else {
-        // Fallback: for IDs >= 10, use hex format
-        String::from_str(_env, "cx")
+        // For IDs >= 20, use a fallback
+        String::from_str(_env, "c99")
     }
 }
 

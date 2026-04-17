@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { FundContractClient, Campaign as ContractCampaign, Donation as ContractDonation } from '@/lib/contract-client';
-import { supabase, type CampaignRow, type DonationRow } from '@/lib/supabase';
+import { supabase, type CampaignRow, type DonationRow, TABLES } from '@/lib/supabase';
 
 export interface Campaign extends ContractCampaign {}
 
@@ -58,7 +58,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
         const { data, error } = await supabase
-          .from('campaigns')
+          .from(TABLES.CAMPAIGNS)
           .select('*')
           .order('created_at', { ascending: false });
         
@@ -137,7 +137,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
-        const { error } = await supabase.from('campaigns').insert({
+        const { error } = await supabase.from(TABLES.CAMPAIGNS).insert({
           id,
           title: newCampaign.title,
           description: newCampaign.description,
@@ -214,7 +214,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
         // Add donation to Supabase
-        const { error: donationError } = await supabase.from('donations').insert({
+        const { error: donationError } = await supabase.from(TABLES.DONATIONS).insert({
           id: Date.now(),
           campaign_id: newDonation.campaignId,
           donor: newDonation.donor,
@@ -229,7 +229,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         const campaign = campaigns.find(c => c.id === donationData.campaignId);
         if (campaign) {
           const { error: updateError } = await supabase
-            .from('campaigns')
+            .from(TABLES.CAMPAIGNS)
             .update({ raised: campaign.raised + donationData.amount })
             .eq('id', donationData.campaignId);
           
@@ -266,7 +266,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       try {
         const { data, error } = await supabase
-          .from('donations')
+          .from(TABLES.DONATIONS)
           .select('*')
           .eq('campaign_id', campaignId)
           .order('timestamp', { ascending: false });

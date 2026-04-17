@@ -31,3 +31,9 @@ export interface DonationRow {
   message: string;
   timestamp: number;
 }
+
+// Table names for stellar-fund collection
+export const TABLES = {
+  CAMPAIGNS: 'stellar-fund_campaigns',
+  DONATIONS: 'stellar-fund_donations',
+} as const;

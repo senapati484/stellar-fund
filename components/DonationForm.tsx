@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Campaign as ContractCampaign, TxProgress } from '@/lib/contract-client';
-import { Campaign } from '@/components/CampaignProvider';
+import { TxProgress } from '@/lib/contract-client';
+import { Campaign, useCampaigns } from '@/components/CampaignProvider';
 import { stellar, WalletRejectedError, InsufficientBalanceError, ContractError, CampaignExpiredError } from '@/lib/stellar-helper';
 import { Input, TxProgressStepper, Alert, Button } from './ui';
 import { FaHeart } from 'react-icons/fa';
@@ -15,6 +15,7 @@ interface DonationFormProps {
 }
 
 export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: DonationFormProps) {
+  const { addDonation } = useCampaigns();
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState<{ amount?: string; message?: string }>({});
@@ -70,18 +71,22 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
 
       // Record donation in contract
       const amountXlm = parseFloat(amount);
-      // Note: This would need the contract client, but since contract-client.ts has errors,
-      // we'll simulate the success for now
+      
       setProgress({ stage: 'submitting', message: 'Broadcasting to network…' });
 
-      // Simulate contract call
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       setProgress({ stage: 'confirming', message: 'Confirming on-chain…' });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Record donation on blockchain
+      await addDonation({
+        campaignId: campaign.id,
+        donor: publicKey,
+        amount: amountXlm,
+        message: message,
+      });
 
-      const hash = 'simulated-tx-hash';
+      const hash = 'recorded-on-chain';
       setProgress({ stage: 'success', message: 'Confirmed!', hash });
 
       setAlert({

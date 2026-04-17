@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { DonationForm } from '@/components/DonationForm';
 import { CampaignStatusBadge, FundingProgressBar, SkeletonLoader, EmptyState, Button, ShareButton, Alert } from '@/components/ui';
-import { Donation } from '@/lib/contract-client';
+import { Donation, FundContractClient } from '@/lib/contract-client';
 import { useCampaigns } from '@/components/CampaignProvider';
 import { stellar } from '@/lib/stellar-helper';
 import { useWallet } from '@/components/WalletProvider';
@@ -15,41 +15,61 @@ export default function CampaignPage() {
   const router = useRouter();
   const id = params.id as string;
   const { publicKey, isConnected } = useWallet();
-  const { getCampaign, campaigns, updateCampaign, getDonations, addDonation } = useCampaigns();
+  const { getCampaign, campaigns, updateCampaign, getDonations, addDonation, refreshCampaigns } = useCampaigns();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [donationsLoading, setDonationsLoading] = useState(false);
 
   console.log('Campaign page - id:', id, 'campaigns:', campaigns);
 
   const campaign = id ? campaigns.find(c => c.id === parseInt(id)) : undefined;
-  const donations = campaign ? getDonations(campaign.id) : [];
+
+  // Load donations when campaign changes
+  useEffect(() => {
+    if (campaign) {
+      setDonationsLoading(true);
+      getDonations(campaign.id).then(fetched => {
+        setDonations(fetched);
+        setDonationsLoading(false);
+      }).catch(err => {
+        console.error('Failed to load donations:', err);
+        setDonationsLoading(false);
+      });
+    }
+  }, [campaign?.id, getDonations]);
+
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleDonateSuccess = () => {
     setRefreshTrigger(prev => prev + 1);
+    refreshCampaigns();
   };
 
-  const handleDonate = (amount: number, message: string = '') => {
+  const handleDonate = async (amount: number, message: string = '') => {
     if (!campaign) return;
 
-    // Update campaign raised amount
-    updateCampaign(campaign.id, {
-      raised: campaign.raised + amount,
-    });
-
-    // Add donation record
-    addDonation({
+    // Add donation record on blockchain
+    await addDonation({
       campaignId: campaign.id,
       donor: publicKey,
       amount,
       message,
     });
+
+    // Refresh donations
+    const fetched = await getDonations(campaign.id);
+    setDonations(fetched);
   };
 
   const handleWithdraw = async () => {
     if (!campaign || !publicKey) return;
     try {
-      // Simulate blockchain withdrawal delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Create contract client and call withdraw on blockchain
+      const client = new FundContractClient((progress) => {
+        console.log('Withdraw progress:', progress);
+      });
+      
+      await client.withdraw(publicKey, campaign.id);
       
       // Update local state to mark campaign as withdrawn
       updateCampaign(campaign.id, { withdrawn: true, active: false });

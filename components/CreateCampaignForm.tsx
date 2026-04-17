@@ -102,7 +102,7 @@ export function CreateCampaignForm({ publicKey, onSuccess }: CreateCampaignFormP
       const goalValue = parseFloat(goalXlm);
       console.log('Goal value being saved:', goalValue, 'from string:', goalXlm);
 
-      const campaignId = addCampaign({
+      const campaignId = await addCampaign({
         title,
         description,
         goal: goalValue,

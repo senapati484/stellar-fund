@@ -1,38 +1,24 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { FundContractClient, Campaign as ContractCampaign, Donation as ContractDonation } from '@/lib/contract-client';
 
-export interface Campaign {
-  id: number;
-  title: string;
-  description: string;
-  goal: number;
-  raised: number;
-  deadline: number;
-  owner: string;
-  active: boolean;
-  withdrawn: boolean;
-  createdAt: number;
-  capDonationsAtGoal?: boolean;
-}
+export interface Campaign extends ContractCampaign {}
 
-export interface Donation {
-  campaignId: number;
-  donor: string;
-  amount: number;
-  message: string;
-  timestamp: number;
-}
+export interface Donation extends ContractDonation {}
 
 interface CampaignContextType {
   campaigns: Campaign[];
   donations: Donation[];
-  addCampaign: (campaign: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => number;
+  loading: boolean;
+  error: string | null;
+  refreshCampaigns: () => Promise<void>;
+  addCampaign: (campaign: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => Promise<number>;
   getCampaign: (id: number) => Campaign | undefined;
   updateCampaign: (id: number, updates: Partial<Campaign>) => void;
   clearCampaigns: () => void;
-  addDonation: (donation: Omit<Donation, 'timestamp'>) => void;
-  getDonations: (campaignId: number) => Donation[];
+  addDonation: (donation: Omit<Donation, 'timestamp'>) => Promise<void>;
+  getDonations: (campaignId: number) => Promise<Donation[]>;
   clearDonations: () => void;
 }
 
@@ -49,85 +35,102 @@ export function useCampaigns() {
 export function CampaignProvider({ children }: { children: ReactNode }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [client, setClient] = useState<FundContractClient | null>(null);
 
+  // Initialize contract client
   useEffect(() => {
-    // Load campaigns from localStorage on mount
-    if (typeof window !== 'undefined') {
+    try {
+      const fundClient = new FundContractClient((progress) => {
+        console.log('Contract progress:', progress);
+      });
+      setClient(fundClient);
+    } catch (err) {
+      console.error('Failed to initialize contract client:', err);
+      setError('Blockchain contract not available. Using local storage mode.');
+    }
+  }, []);
+
+  // Fetch campaigns from blockchain - shared across all users
+  const refreshCampaigns = useCallback(async () => {
+    if (!client) {
+      // Fallback to localStorage if no client
       const stored = localStorage.getItem('sf_campaigns');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          console.log('Campaigns loaded from localStorage:', parsed);
-          // Validate and fix corrupted data
-          const validated = parsed.map((c: any) => ({
-            id: Number(c.id) || Date.now(),
-            title: String(c.title || ''),
-            description: String(c.description || ''),
-            goal: Number(c.goal) || 0,
-            raised: Number(c.raised) || 0,
-            deadline: Number(c.deadline) || 0,
-            owner: String(c.owner || ''),
-            active: Boolean(c.active),
-            withdrawn: Boolean(c.withdrawn),
-            createdAt: Number(c.createdAt) || Math.floor(Date.now() / 1000),
-          }));
-          console.log('Validated campaigns:', validated);
-          setCampaigns(validated);
+          setCampaigns(parsed);
         } catch (err) {
-          console.error('Failed to load campaigns:', err);
-          // Clear corrupted data
-          localStorage.removeItem('sf_campaigns');
+          console.error('Failed to load from localStorage:', err);
         }
       }
+      setLoading(false);
+      return;
+    }
 
-      // Load donations from localStorage
-      const storedDonations = localStorage.getItem('sf_donations');
-      if (storedDonations) {
+    try {
+      setLoading(true);
+      const { campaigns: fetchedCampaigns } = await client.getAllCampaigns(true);
+      setCampaigns(fetchedCampaigns);
+      setError(null);
+      
+      // Also cache in localStorage for offline access
+      localStorage.setItem('sf_campaigns', JSON.stringify(fetchedCampaigns));
+    } catch (err) {
+      console.error('Failed to fetch campaigns from blockchain:', err);
+      // Fallback to localStorage
+      const stored = localStorage.getItem('sf_campaigns');
+      if (stored) {
         try {
-          const parsed = JSON.parse(storedDonations);
-          console.log('Donations loaded from localStorage:', parsed);
-          setDonations(parsed);
-        } catch (err) {
-          console.error('Failed to load donations:', err);
-          localStorage.removeItem('sf_donations');
+          const parsed = JSON.parse(stored);
+          setCampaigns(parsed);
+        } catch (e) {
+          console.error('Failed to load from localStorage:', e);
         }
       }
+      setError('Could not connect to blockchain. Showing cached data.');
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [client]);
 
-  const addCampaign = (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
-    const id = Date.now();
-    const newCampaign: Campaign = {
-      title: String(campaignData.title || ''),
-      description: String(campaignData.description || ''),
-      goal: Number(campaignData.goal) || 0,
-      deadline: Number(campaignData.deadline) || 0,
-      owner: String(campaignData.owner || ''),
-      id,
-      raised: 0,
-      active: true,
-      withdrawn: false,
-      createdAt: Math.floor(Date.now() / 1000),
-      capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
-    };
+  // Load campaigns on mount
+  useEffect(() => {
+    refreshCampaigns();
+    
+    // Refresh every 30 seconds to keep data in sync
+    const interval = setInterval(refreshCampaigns, 30000);
+    return () => clearInterval(interval);
+  }, [refreshCampaigns]);
 
-    console.log('New campaign being added:', newCampaign);
-    console.log('Goal value type:', typeof newCampaign.goal, 'value:', newCampaign.goal);
-
-    const updatedCampaigns = [...campaigns, newCampaign];
-    setCampaigns(updatedCampaigns);
-
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
-      console.log('Campaigns saved to localStorage:', updatedCampaigns);
-
-      // Verify save
-      const verify = localStorage.getItem('sf_campaigns');
-      console.log('Verification - localStorage contains:', verify);
+  const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
+    if (!client) {
+      throw new Error('Blockchain contract not available');
     }
 
-    return id;
+    try {
+      // Calculate duration from deadline
+      const durationDays = Math.ceil((campaignData.deadline - Math.floor(Date.now() / 1000)) / (24 * 60 * 60));
+      
+      // Create campaign on blockchain
+      await client.createCampaign({
+        ownerKey: campaignData.owner,
+        title: campaignData.title,
+        description: campaignData.description,
+        goalXlm: campaignData.goal,
+        durationDays: Math.max(1, durationDays)
+      });
+
+      // Refresh to get the new campaign from blockchain
+      await refreshCampaigns();
+      
+      // Return a generated ID (actual ID comes from blockchain)
+      return Date.now();
+    } catch (err) {
+      console.error('Failed to create campaign on blockchain:', err);
+      throw err;
+    }
   };
 
   const getCampaign = (id: number) => {
@@ -166,26 +169,42 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addDonation = (donationData: Omit<Donation, 'timestamp'>) => {
-    const newDonation: Donation = {
-      ...donationData,
-      timestamp: Math.floor(Date.now() / 1000),
-    };
+  const addDonation = async (donationData: Omit<Donation, 'timestamp'>) => {
+    if (!client) {
+      throw new Error('Blockchain contract not available');
+    }
 
-    console.log('New donation being added:', newDonation);
+    try {
+      // Submit donation to blockchain using recordDonation
+      await client.recordDonation({
+        donorKey: donationData.donor,
+        campaignId: donationData.campaignId,
+        amountXlm: donationData.amount,
+        message: donationData.message
+      });
 
-    const updatedDonations = [...donations, newDonation];
-    setDonations(updatedDonations);
-
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sf_donations', JSON.stringify(updatedDonations));
-      console.log('Donations saved to localStorage:', updatedDonations);
+      // Refresh campaigns to get updated raised amount
+      await refreshCampaigns();
+    } catch (err) {
+      console.error('Failed to submit donation to blockchain:', err);
+      throw err;
     }
   };
 
-  const getDonations = (campaignId: number) => {
-    return donations.filter(d => d.campaignId === campaignId);
+  const getDonations = async (campaignId: number): Promise<Donation[]> => {
+    if (!client) {
+      // Fallback to localStorage
+      return donations.filter(d => d.campaignId === campaignId);
+    }
+
+    try {
+      const { donations: fetchedDonations } = await client.getDonations(campaignId, true);
+      return fetchedDonations;
+    } catch (err) {
+      console.error('Failed to fetch donations from blockchain:', err);
+      // Fallback to localStorage
+      return donations.filter(d => d.campaignId === campaignId);
+    }
   };
 
   const clearDonations = () => {
@@ -197,7 +216,20 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <CampaignContext.Provider value={{ campaigns, donations, addCampaign, getCampaign, updateCampaign, clearCampaigns, addDonation, getDonations, clearDonations }}>
+    <CampaignContext.Provider value={{ 
+      campaigns, 
+      donations, 
+      loading,
+      error,
+      refreshCampaigns,
+      addCampaign, 
+      getCampaign, 
+      updateCampaign, 
+      clearCampaigns, 
+      addDonation, 
+      getDonations, 
+      clearDonations 
+    }}>
       {children}
     </CampaignContext.Provider>
   );

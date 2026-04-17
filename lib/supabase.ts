@@ -36,8 +36,8 @@ export interface DonationRow {
   timestamp: number;
 }
 
-// Table names for stellar-fund collection
+// Table names for stellar_fund collection (using underscores for PostgreSQL compatibility)
 export const TABLES = {
-  CAMPAIGNS: 'stellar-fund_campaigns',
-  DONATIONS: 'stellar-fund_donations',
+  CAMPAIGNS: 'stellar_fund_campaigns',
+  DONATIONS: 'stellar_fund_donations',
 } as const;

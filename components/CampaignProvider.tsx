@@ -13,11 +13,11 @@ interface CampaignContextType {
   loading: boolean;
   error: string | null;
   client: FundContractClient | null;
-  addCampaign: (campaign: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => Promise<number>;
+  addCampaign: (campaign: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => Promise<string>;
   addDonation: (donation: Omit<Donation, 'timestamp'>) => Promise<void>;
-  getDonations: (campaignId: number) => Promise<Donation[]>;
-  getCampaign: (id: number) => Campaign | undefined;
-  updateCampaign: (id: number, updates: Partial<Campaign>) => void;
+  getDonations: (campaignId: string) => Promise<Donation[]>;
+  getCampaign: (id: string) => Campaign | undefined;
+  updateCampaign: (id: string, updates: Partial<Campaign>) => void;
   refreshCampaigns: () => Promise<void>;
   clearCampaigns: () => void;
   clearDonations: () => void;
@@ -127,15 +127,15 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const getCampaign = (id: number) => {
-    return campaigns.find(c => c.id === id);
+  const getCampaign = (id: string) => {
+    return campaigns.find(c => String(c.id) === id);
   };
 
-  const updateCampaign = (id: number, updates: Partial<Campaign>) => {
+  const updateCampaign = (id: string, updates: Partial<Campaign>) => {
     console.log('Updating campaign:', id, 'with updates:', updates);
     setCampaigns(prev => {
       const updatedCampaigns = prev.map(c => {
-        if (c.id === id) {
+        if (String(c.id) === id) {
           const updated = { ...c, ...updates };
           console.log('Campaign after update:', updated);
           return updated;
@@ -161,7 +161,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       // Submit donation to blockchain using recordDonation
       await clientRef.current.recordDonation({
         donorKey: donationData.donor,
-        campaignId: donationData.campaignId,
+        campaignId: donationData.campaignId as unknown as number,
         amountXlm: donationData.amount,
         message: donationData.message
       });
@@ -174,7 +174,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const getDonations = async (campaignId: number): Promise<Donation[]> => {
+  const getDonations = async (campaignId: string): Promise<Donation[]> => {
     if (!clientRef.current) {
       throw new Error('Blockchain contract not available');
     }

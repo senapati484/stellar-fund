@@ -13,6 +13,7 @@ import {
   SorobanDataBuilder,
   TimeoutInfinite,
   XdrLargeInt,
+  scValToNative,
 } from "@stellar/stellar-sdk";
 import { Api } from "@stellar/stellar-sdk/rpc";
 
@@ -45,7 +46,7 @@ export type TxProgress =
   | { stage: "error"; message: string; errorType: string };
 
 export interface Campaign {
-  id: number;
+  id: string;
   owner: string;
   title: string;
   description: string;
@@ -58,7 +59,7 @@ export interface Campaign {
 }
 
 export interface Donation {
-  campaignId: number;
+  campaignId: string;
   donor: string;
   amount: number;
   message: string;
@@ -185,10 +186,11 @@ class FundContractClient {
           // NOT_FOUND (pending) - continue polling
           console.log('[ContractClient] TX status: PENDING, attempt:', attempts + 1);
         } catch (err) {
-          if (err instanceof Error && err.message.includes('failed')) {
-            throw err;
+          const error = err as Error;
+          if (error.message && error.message.includes('failed')) {
+            throw error;
           }
-          console.warn(`[ContractClient] Error polling transaction (${attempts + 1}/${maxAttempts}):`, err.message);
+          console.warn(`[ContractClient] Error polling transaction (${attempts + 1}/${maxAttempts}):`, error.message);
         }
 
         attempts++;
@@ -227,7 +229,7 @@ class FundContractClient {
     description: string;
     goalXlm: number;
     durationDays: number;
-  }): Promise<number> {
+  }): Promise<string> {
     this.updateProgress({
       stage: "building",
       message: "Building transaction…",
@@ -273,23 +275,14 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${errorMsg}`);
       }
 
-      // Step 4: Extract campaign ID from simulation result (the contract returns u32)
+      // Step 4: Extract campaign ID from simulation result (the contract returns u64)
       const createResult = simResponse.result?.retval;
-      let campaignId: number;
-      if (createResult?._switch?.name === 'scvU32') {
-        campaignId = Number(createResult._value);
+      let campaignId: string;
+      if (createResult?._switch?.name === 'scvU64') {
+        campaignId = String(createResult._value);
       } else {
-        // Fallback: use campaign count + 1
-        const countResult = await this.server.simulateTransaction(
-          new TransactionBuilder(account, {
-            fee: BASE_FEE,
-            networkPassphrase: Networks.TESTNET,
-          })
-            .addOperation(contract.call("get_campaign_count"))
-            .setTimeout(TimeoutInfinite)
-            .build(),
-        ) as any;
-        campaignId = Number(countResult.result?.retval?._value || 0);
+        // Fallback: use timestamp-based ID (will be replaced by real one after confirm)
+        campaignId = String(Date.now());
       }
       console.log('[ContractClient] Campaign ID:', campaignId);
 
@@ -315,7 +308,7 @@ class FundContractClient {
 
   async recordDonation(params: {
     donorKey: string;
-    campaignId: number;
+    campaignId: string | number;
     amountXlm: number;
     message: string;
   }): Promise<string> {
@@ -343,7 +336,7 @@ class FundContractClient {
           contract.call(
             "donate",
             new Address(normalizedDonor).toScVal(),
-            xdr.ScVal.scvU32(params.campaignId),
+            xdr.ScVal.scvU64(new xdr.Uint64(BigInt(params.campaignId))),
             new XdrLargeInt("i128", amountStroops).toI128(),
             xdr.ScVal.scvString(params.message),
           ),
@@ -394,7 +387,7 @@ class FundContractClient {
         fee: BASE_FEE,
         networkPassphrase: Networks.TESTNET,
       })
-        .addOperation(contract.call("withdraw", xdr.ScVal.scvU32(campaignId)))
+        .addOperation(contract.call("withdraw", xdr.ScVal.scvU64(new xdr.Uint64(BigInt(campaignId)))))
         .setTimeout(300)
         .build();
 
@@ -534,7 +527,7 @@ class FundContractClient {
   }
 
   async getDonations(
-    campaignId: number,
+    campaignId: string,
     forceRefresh = false,
   ): Promise<{ donations: Donation[]; cached: boolean }> {
     const cacheKey = `donations:${campaignId}`;
@@ -554,7 +547,7 @@ class FundContractClient {
           networkPassphrase: Networks.TESTNET,
         })
           .addOperation(
-            contract.call("get_donations", xdr.ScVal.scvU32(campaignId)),
+            contract.call("get_donations", xdr.ScVal.scvU64(new xdr.Uint64(BigInt(campaignId)))),
           )
           .setTimeout(TimeoutInfinite)
           .build(),
@@ -598,22 +591,11 @@ class FundContractClient {
     try {
       const result = response.result?.retval;
       if (!result) {
-        console.log('[ContractClient] parseSingleCampaignResponse: no result');
         return null;
       }
 
-      console.log('[ContractClient] parseSingleCampaignResponse: result._switch:', result._switch?.name);
-      console.log('[ContractClient] parseSingleCampaignResponse: result._value keys:', result._value ? Object.keys(result._value) : 'none');
-
-      // Single Campaign struct - _value contains the map entries directly
-      // The structure is: { _switch: { name: "scvMap" }, _value: [{ key: ScVal, val: ScVal }] }
-      if (result._switch?.name === "scvMap") {
-        const campaign = this.parseMapToCampaign(result);
-        console.log('[ContractClient] parseSingleCampaignResponse: parsed campaign:', campaign);
-        return campaign;
-      }
-
-      return null;
+      const native = scValToNative(result) as Record<string, any>;
+      return this.parseCampaignFromNative(native);
     } catch (error) {
       console.error("Error parsing single campaign:", error);
       return null;
@@ -623,193 +605,60 @@ class FundContractClient {
   private parseCampaignResponse(response: any): Campaign[] {
     try {
       const result = response.result?.retval;
-      if (!result || !result._value) {
-        console.log('[ContractClient] parseCampaignResponse: no result or _value');
+      if (!result) {
         return [];
       }
 
-      const vec = Array.isArray(result._value) ? result._value : [];
-      console.log('[ContractClient] parseCampaignResponse: vec length:', vec.length);
-      const campaigns = vec
-        .map((item: any, idx: number) => {
-          const parsed = this.parseMapToCampaign(item);
-          console.log(`[ContractClient] parseCampaignResponse[${idx}]:`, parsed?.id, 'owner:', parsed?.owner?.slice(0, 8));
-          return parsed;
-        })
-        .filter(Boolean) as Campaign[];
-      return campaigns;
+      const native = scValToNative(result) as Record<string, any>[];
+      if (!Array.isArray(native)) {
+        return [];
+      }
+
+      return native.map(this.parseCampaignFromNative);
     } catch (error) {
       console.error("Error parsing campaigns:", error);
       return [];
     }
   }
 
-  private decodeScVal(val: any): any {
-    if (!val) return null;
-    const switchVal = val._switch?.name;
-    const armValue = val._arm;
-    const inner = val._value;
-
-    switch (switchVal) {
-      case "scvU32":
-        return Number(inner);
-      case "scvU64":
-        return Number(inner?._value || 0);
-      case "scvI128":
-        // i128 stored as { lo: u64, hi: i64 } in _value._attributes
-        const attrs = inner?._attributes;
-        if (attrs) {
-          const lo = BigInt(attrs.lo?._value || 0);
-          const hi = BigInt(attrs.hi?._value || 0);
-          // Convert i128 to Number (for display purposes)
-          if (hi === BigInt(0)) return Number(lo);
-          // Handle negative i128
-          const twosComplement = (hi << BigInt(64)) | lo;
-          const threshold = BigInt(1) << BigInt(127);
-          const signed = twosComplement >= threshold ? twosComplement - (BigInt(1) << BigInt(128)) : twosComplement;
-          return Number(signed);
-        }
-        return Number(inner || 0);
-      case "scvBool":
-        return Boolean(inner);
-      case "scvString":
-      case "scvSymbol":
-        // _value can be a Buffer directly or { data: Buffer }
-        if (Buffer.isBuffer(inner)) {
-          return inner.toString("utf8");
-        }
-        if (inner?.data && Buffer.isBuffer(inner.data)) {
-          return inner.data.toString("utf8");
-        }
-        return String(inner || "");
-      case "scvAddress":
-        // ScAddress structure from parsed XDR (different from constructed ScAddress):
-        // { _switch: { name: "scAddressTypeAccount" }, _arm: "accountId", _value: { _value: Buffer (raw 32 bytes) } }
-        const addrInner = val._value;
-        if (addrInner?._switch?.name === "scAddressTypeAccount") {
-          // Raw bytes are at _value._value in parsed XDR
-          const rawBytes = addrInner._value?._value;
-          if (Buffer.isBuffer(rawBytes) && rawBytes.length === 32) {
-            return StrKey.encodeEd25519PublicKey(rawBytes);
-          }
-        }
-        if (addrInner?._switch?.name === "scAddressTypeContract") {
-          // Contract address: _value is { contractId: Buffer }
-          const contractId = addrInner._value?.contractId;
-          if (Buffer.isBuffer(contractId)) {
-            return StrKey.encodeContract(contractId);
-          }
-        }
-        return "";
-      default:
-        return null;
-    }
-  }
-
-  private parseMapToCampaign(item: any): Campaign | null {
-    try {
-      // The map entries are in _value as an array of { key: ScVal, val: ScVal }
-      const entries = item._value || [];
-      const fields: Record<string, any> = {};
-
-      for (const entry of entries) {
-        const keyVal = entry._attributes?.key;
-        const valVal = entry._attributes?.val;
-
-        if (!keyVal || !valVal) continue;
-
-        // Decode the key symbol
-        let keyName = "";
-        if (keyVal._switch?.name === "scvSymbol") {
-          const keyInner = keyVal._value;
-          if (Buffer.isBuffer(keyInner)) {
-            keyName = keyInner.toString("utf8");
-          } else if (keyInner?.data) {
-            keyName = Buffer.from(keyInner.data).toString("utf8");
-          }
-        }
-
-        // Decode the value based on type
-        const decodedVal = this.decodeScVal(valVal);
-        if (keyName) {
-          fields[keyName] = decodedVal;
-        }
-      }
-
-      return {
-        id: fields.id ?? fields.id === 0 ? Number(fields.id) : 0,
-        owner: fields.owner ? String(fields.owner) : "",
-        title: fields.title ? String(fields.title) : "",
-        description: fields.description ? String(fields.description) : "",
-        // Convert from stroops (10^7) to XLM for display
-        goal: (fields.goal ?? 0) / 10_000_000,
-        raised: (fields.raised ?? 0) / 10_000_000,
-        deadline: fields.deadline ?? 0,
-        withdrawn: Boolean(fields.withdrawn),
-        active: Boolean(fields.active),
-        createdAt: fields.created_at ?? fields.createdAt ?? 0,
-      };
-    } catch {
-      return null;
-    }
+  private parseCampaignFromNative = (item: Record<string, any>): Campaign => {
+    return {
+      id: String(item.id ?? "0"),
+      owner: item.owner ? String(item.owner) : "",
+      title: item.title ? String(item.title) : "",
+      description: item.description ? String(item.description) : "",
+      goal: Number(item.goal ?? BigInt(0)) / 10_000_000,
+      raised: Number(item.raised ?? BigInt(0)) / 10_000_000,
+      deadline: Number(item.deadline ?? BigInt(0)),
+      withdrawn: Boolean(item.withdrawn ?? false),
+      active: Boolean(item.active ?? true),
+      createdAt: Number(item.created_at ?? BigInt(0)),
+    };
   }
 
   private parseDonationResponse(response: any): Donation[] {
     try {
       const result = response.result?.retval;
-      if (!result || !result._value) return [];
+      if (!result) return [];
 
-      const vec = Array.isArray(result._value) ? result._value : [];
-      return vec
-        .map((item: any) => this.parseMapToDonation(item))
-        .filter(Boolean) as Donation[];
+      const native = scValToNative(result) as Record<string, any>[];
+      if (!Array.isArray(native)) return [];
+
+      return native.map(this.parseDonationFromNative);
     } catch (error) {
       console.error("Error parsing donations:", error);
       return [];
     }
   }
 
-  private parseMapToDonation(item: any): Donation | null {
-    try {
-      // The map entries are in _value as an array of { key: ScVal, val: ScVal }
-      const entries = item._value || [];
-      const fields: Record<string, any> = {};
-
-      for (const entry of entries) {
-        const keyVal = entry._attributes?.key;
-        const valVal = entry._attributes?.val;
-
-        if (!keyVal || !valVal) continue;
-
-        // Decode the key symbol
-        let keyName = "";
-        if (keyVal._switch?.name === "scvSymbol") {
-          const keyInner = keyVal._value;
-          if (Buffer.isBuffer(keyInner)) {
-            keyName = keyInner.toString("utf8");
-          } else if (keyInner?.data) {
-            keyName = Buffer.from(keyInner.data).toString("utf8");
-          }
-        }
-
-        // Decode the value based on type
-        const decodedVal = this.decodeScVal(valVal);
-        if (keyName) {
-          fields[keyName] = decodedVal;
-        }
-      }
-
-      return {
-        campaignId: fields.campaign_id ?? 0,
-        donor: fields.donor ? String(fields.donor) : "",
-        // Convert from stroops (10^7) to XLM for display
-        amount: (fields.amount ?? 0) / 10_000_000,
-        message: fields.message ? String(fields.message) : "",
-        timestamp: fields.timestamp ?? 0,
-      };
-    } catch {
-      return null;
-    }
+  private parseDonationFromNative = (item: Record<string, any>): Donation => {
+    return {
+      campaignId: String(item.campaign_id ?? "0"),
+      donor: item.donor ? String(item.donor) : "",
+      amount: Number(item.amount ?? BigInt(0)) / 10_000_000,
+      message: item.message ? String(item.message) : "",
+      timestamp: Number(item.timestamp ?? BigInt(0)),
+    };
   }
 
   getProgressPercent(campaign: Campaign): number {

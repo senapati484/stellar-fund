@@ -194,7 +194,7 @@ export class FundContractClient {
 
     const account = await this.server.getAccount(params.ownerKey);
     const contract = new Contract(this.contractId);
-    const goalStroops = Math.round(params.goalXlm * 10_000_000);
+    const goalStroops = BigInt(Math.round(params.goalXlm * 10_000_000));
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -206,7 +206,10 @@ export class FundContractClient {
           new Address(normalizeAddress(params.ownerKey)).toScVal(),
           xdr.ScVal.scvString(params.title),
           xdr.ScVal.scvString(params.description),
-          xdr.ScVal.scvU64(goalStroops as any),
+          xdr.ScVal.scvI128(new xdr.Int128Parts({
+            lo: xdr.Uint64.fromString(goalStroops.toString()),
+            hi: xdr.Int64.fromString('0')
+          })),
           xdr.ScVal.scvU32(params.durationDays)
         )
       )
@@ -230,7 +233,7 @@ export class FundContractClient {
 
     const account = await this.server.getAccount(params.donorKey);
     const contract = new Contract(this.contractId);
-    const amountStroops = Math.round(params.amountXlm * 10_000_000);
+    const amountStroops = BigInt(Math.round(params.amountXlm * 10_000_000));
 
     const tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
@@ -241,7 +244,10 @@ export class FundContractClient {
           "donate",
           new Address(normalizeAddress(params.donorKey)).toScVal(),
           xdr.ScVal.scvU32(params.campaignId),
-          xdr.ScVal.scvI128(amountStroops as any),
+          xdr.ScVal.scvI128(new xdr.Int128Parts({
+            lo: xdr.Uint64.fromString(amountStroops.toString()),
+            hi: xdr.Int64.fromString('0')
+          })),
           xdr.ScVal.scvString(params.message)
         )
       )

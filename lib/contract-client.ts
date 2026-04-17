@@ -103,6 +103,7 @@ export class FundContractClient {
 
   constructor(onProgress?: (progress: TxProgress) => void) {
     this.contractId = process.env.NEXT_PUBLIC_CONTRACT_ID || "";
+    console.log('FundContractClient initialized with contract ID:', this.contractId);
     if (!this.contractId) {
       throw new Error("NEXT_PUBLIC_CONTRACT_ID not set");
     }
@@ -146,28 +147,38 @@ export class FundContractClient {
       });
 
       const hash = result.hash;
+      console.log('Transaction submitted, hash:', hash);
       let attempts = 0;
-      const maxAttempts = 15;
+      const maxAttempts = 30; // Increased from 15 to 30 (60 seconds total)
 
       while (attempts < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        const txResult = await this.server.getTransaction(hash);
-        if (txResult.status === "SUCCESS") {
-          this.updateProgress({
-            stage: "success",
-            message: "Confirmed!",
-            hash,
-          });
-          return hash;
-        } else if (txResult.status === "FAILED") {
-          throw new Error(`Transaction failed: ${txResult.resultXdr}`);
+        try {
+          const txResult = await this.server.getTransaction(hash);
+          console.log(`Attempt ${attempts + 1}/${maxAttempts}: Transaction status:`, txResult.status);
+          console.log(`Contract ID: ${this.contractId}`);
+          if (txResult.status === "SUCCESS") {
+            this.updateProgress({
+              stage: "success",
+              message: "Confirmed!",
+              hash,
+            });
+            return hash;
+          } else if (txResult.status === "FAILED") {
+            console.error('Transaction failed:', txResult);
+            throw new Error(`Transaction failed: ${txResult.resultXdr || 'No result XDR'}`);
+          }
+          // PENDING or other status - continue waiting
+          console.log('Transaction still pending, waiting...');
+        } catch (err) {
+          console.error('Error checking transaction status:', err);
         }
 
         attempts++;
       }
 
-      throw new Error("Transaction confirmation timeout");
+      throw new Error(`Transaction confirmation timeout after ${maxAttempts * 2} seconds`);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";

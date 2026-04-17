@@ -16,10 +16,21 @@ import {
 const createMockAccount = () =>
   new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0");
 
-// Convert a raw hex ed25519 key to a G... address string
-function hexToAddress(hexKey: string): string {
-  const rawKey = Buffer.from(hexKey, "hex");
-  return StrKey.encodeEd25519PublicKey(rawKey);
+// Convert address to proper format for Soroban
+// If already a G... address, return as-is. If hex, convert to G... address.
+function normalizeAddress(address: string): string {
+  // If it's already a G... address, return it directly
+  if (address.startsWith('G') && address.length === 56) {
+    return address;
+  }
+  // Otherwise assume it's hex and convert
+  try {
+    const rawKey = Buffer.from(address, "hex");
+    return StrKey.encodeEd25519PublicKey(rawKey);
+  } catch {
+    // If conversion fails, return original (might already be correct format)
+    return address;
+  }
 }
 
 import { stellar } from "./stellar-helper";
@@ -192,7 +203,7 @@ export class FundContractClient {
       .addOperation(
         contract.call(
           "create_campaign",
-          new Address(hexToAddress(params.ownerKey)).toScVal(),
+          new Address(normalizeAddress(params.ownerKey)).toScVal(),
           xdr.ScVal.scvString(params.title),
           xdr.ScVal.scvString(params.description),
           xdr.ScVal.scvU64(goalStroops as any),
@@ -228,7 +239,7 @@ export class FundContractClient {
       .addOperation(
         contract.call(
           "donate",
-          new Address(hexToAddress(params.donorKey)).toScVal(),
+          new Address(normalizeAddress(params.donorKey)).toScVal(),
           xdr.ScVal.scvU32(params.campaignId),
           xdr.ScVal.scvI128(amountStroops as any),
           xdr.ScVal.scvString(params.message)
@@ -335,7 +346,7 @@ export class FundContractClient {
         .addOperation(
           contract.call(
             "get_user_campaigns",
-            new Address(hexToAddress(ownerKey)).toScVal()
+            new Address(normalizeAddress(ownerKey)).toScVal()
           )
         )
         .setTimeout(30)

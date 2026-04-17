@@ -281,6 +281,7 @@ export class FundContractClient {
         networkPassphrase: Networks.TESTNET,
       })
         .addOperation(contract.call("get_all_campaigns"))
+        .setTimeout(30)
         .build()
     );
 
@@ -298,6 +299,7 @@ export class FundContractClient {
         networkPassphrase: Networks.TESTNET,
       })
         .addOperation(contract.call("get_active_campaigns"))
+        .setTimeout(30)
         .build()
     );
 
@@ -312,6 +314,7 @@ export class FundContractClient {
         networkPassphrase: Networks.TESTNET,
       })
         .addOperation(contract.call("get_campaign", xdr.ScVal.scvU32(id)))
+        .setTimeout(30)
         .build()
     );
 
@@ -335,6 +338,7 @@ export class FundContractClient {
             new Address(hexToAddress(ownerKey)).toScVal()
           )
         )
+        .setTimeout(30)
         .build()
     );
 
@@ -361,6 +365,7 @@ export class FundContractClient {
         networkPassphrase: Networks.TESTNET,
       })
         .addOperation(contract.call("get_donations", xdr.ScVal.scvU32(campaignId)))
+        .setTimeout(30)
         .build()
     );
 
@@ -378,6 +383,7 @@ export class FundContractClient {
         networkPassphrase: Networks.TESTNET,
       })
         .addOperation(contract.call("get_campaign_count"))
+        .setTimeout(30)
         .build()
     );
 

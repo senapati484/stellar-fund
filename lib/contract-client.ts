@@ -108,7 +108,8 @@ export class FundContractClient {
       throw new Error("NEXT_PUBLIC_CONTRACT_ID not set");
     }
 
-    this.server = new rpc.Server("https://soroban-testnet.stellar.org", {
+    // Try alternative RPC endpoint for better testnet connectivity
+    this.server = new rpc.Server("https://soroban-testnet.stellar.org:443", {
       allowHttp: true,
     });
     this.onProgress = onProgress;

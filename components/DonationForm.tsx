@@ -81,7 +81,7 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
       setAlert({
         type: 'success',
         message: 'Donation successful!',
-        hint: 'Demo mode: Donation recorded in local storage.',
+        hint: 'Your donation has been recorded.',
       });
 
       if (onDonate) {

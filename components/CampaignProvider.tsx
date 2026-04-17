@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { FundContractClient, Campaign as ContractCampaign, Donation as ContractDonation } from '@/lib/contract-client';
+import { supabase, type CampaignRow, type DonationRow } from '@/lib/supabase';
 
 export interface Campaign extends ContractCampaign {}
 
@@ -37,59 +38,77 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [client, setClient] = useState<FundContractClient | null>(null);
 
-  // Initialize contract client - DISABLED due to testnet issues
-  // Using localStorage-only mode for now
+  // Initialize data source - try Supabase first, fallback to localStorage
   useEffect(() => {
-    console.log('Blockchain integration disabled - using localStorage mode');
-    setError('Demo mode: Using local storage. Campaigns are NOT shared across users.');
-    // Don't initialize blockchain client
-    setClient(null);
+    const initDataSource = async () => {
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        console.log('Using Supabase for shared data');
+        setError(null);
+      } else {
+        console.log('Supabase not configured - using localStorage (data not shared)');
+        setError('Supabase not configured. Using localStorage - campaigns are NOT shared across users.');
+      }
+    };
+    initDataSource();
   }, []);
 
-  // Fetch campaigns from blockchain - shared across all users
+  // Fetch campaigns from Supabase - shared across all users
   const refreshCampaigns = useCallback(async () => {
-    if (!client) {
-      // Fallback to localStorage if no client
-      const stored = localStorage.getItem('sf_campaigns');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setCampaigns(parsed);
-        } catch (err) {
-          console.error('Failed to load from localStorage:', err);
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const { data, error } = await supabase
+          .from('campaigns')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data) {
+          const campaigns = data.map((row: CampaignRow) => ({
+            id: row.id,
+            title: row.title,
+            description: row.description,
+            goal: row.goal,
+            raised: row.raised,
+            deadline: row.deadline,
+            owner: row.owner,
+            active: row.active,
+            withdrawn: row.withdrawn,
+            createdAt: row.created_at,
+            capDonationsAtGoal: row.cap_donations_at_goal,
+          }));
+          setCampaigns(campaigns);
+          console.log('Campaigns loaded from Supabase:', campaigns.length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch campaigns from Supabase:', err);
+        setError('Failed to load campaigns from Supabase. Using localStorage.');
+        // Fallback to localStorage
+        const stored = localStorage.getItem('sf_campaigns');
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            setCampaigns(parsed);
+          } catch (e) {
+            console.error('Failed to parse campaigns from localStorage:', e);
+          }
         }
       }
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { campaigns: fetchedCampaigns } = await client.getAllCampaigns(true);
-      setCampaigns(fetchedCampaigns);
-      setError(null);
-      
-      // Also cache in localStorage for offline access
-      localStorage.setItem('sf_campaigns', JSON.stringify(fetchedCampaigns));
-    } catch (err) {
-      console.error('Failed to fetch campaigns from blockchain:', err);
+    } else {
       // Fallback to localStorage
       const stored = localStorage.getItem('sf_campaigns');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
           setCampaigns(parsed);
-        } catch (e) {
-          console.error('Failed to load from localStorage:', e);
+        } catch (err) {
+          console.error('Failed to parse campaigns from localStorage:', err);
         }
       }
-      setError('Could not connect to blockchain. Showing cached data.');
-    } finally {
-      setLoading(false);
     }
-  }, [client]);
+    setLoading(false);
+  }, []);
 
   // Load campaigns on mount
   useEffect(() => {
@@ -101,7 +120,6 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [refreshCampaigns]);
 
   const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
-    // Create campaign in localStorage (demo mode)
     const id = Date.now();
     const newCampaign: Campaign = {
       title: String(campaignData.title || ''),
@@ -117,9 +135,36 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
     };
 
-    const updatedCampaigns = [...campaigns, newCampaign];
-    setCampaigns(updatedCampaigns);
-    localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const { error } = await supabase.from('campaigns').insert({
+          id,
+          title: newCampaign.title,
+          description: newCampaign.description,
+          goal: newCampaign.goal,
+          raised: newCampaign.raised,
+          deadline: newCampaign.deadline,
+          owner: newCampaign.owner,
+          active: newCampaign.active,
+          withdrawn: newCampaign.withdrawn,
+          created_at: newCampaign.createdAt,
+          cap_donations_at_goal: newCampaign.capDonationsAtGoal,
+        });
+        
+        if (error) throw error;
+        
+        // Refresh to get the new campaign
+        await refreshCampaigns();
+      } catch (err) {
+        console.error('Failed to add campaign to Supabase:', err);
+        throw err;
+      }
+    } else {
+      // Fallback to localStorage
+      const updatedCampaigns = [...campaigns, newCampaign];
+      setCampaigns(updatedCampaigns);
+      localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
+    }
     
     return id;
   };
@@ -161,31 +206,91 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   };
 
   const addDonation = async (donationData: Omit<Donation, 'timestamp'>) => {
-    // Record donation in localStorage (demo mode)
     const newDonation: Donation = {
       ...donationData,
       timestamp: Math.floor(Date.now() / 1000),
     };
 
-    const updatedDonations = [...donations, newDonation];
-    setDonations(updatedDonations);
-    localStorage.setItem('sf_donations', JSON.stringify(updatedDonations));
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        // Add donation to Supabase
+        const { error: donationError } = await supabase.from('donations').insert({
+          id: Date.now(),
+          campaign_id: newDonation.campaignId,
+          donor: newDonation.donor,
+          amount: newDonation.amount,
+          message: newDonation.message,
+          timestamp: newDonation.timestamp,
+        });
+        
+        if (donationError) throw donationError;
+        
+        // Update campaign raised amount
+        const campaign = campaigns.find(c => c.id === donationData.campaignId);
+        if (campaign) {
+          const { error: updateError } = await supabase
+            .from('campaigns')
+            .update({ raised: campaign.raised + donationData.amount })
+            .eq('id', donationData.campaignId);
+          
+          if (updateError) throw updateError;
+          
+          // Refresh campaigns to get updated data
+          await refreshCampaigns();
+        }
+      } catch (err) {
+        console.error('Failed to add donation to Supabase:', err);
+        throw err;
+      }
+    } else {
+      // Fallback to localStorage
+      const updatedDonations = [...donations, newDonation];
+      setDonations(updatedDonations);
+      localStorage.setItem('sf_donations', JSON.stringify(updatedDonations));
 
-    // Update campaign raised amount
-    const campaign = campaigns.find(c => c.id === donationData.campaignId);
-    if (campaign) {
-      const updatedCampaigns = campaigns.map(c => 
-        c.id === donationData.campaignId 
-          ? { ...c, raised: c.raised + donationData.amount }
-          : c
-      );
-      setCampaigns(updatedCampaigns);
-      localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
+      // Update campaign raised amount
+      const campaign = campaigns.find(c => c.id === donationData.campaignId);
+      if (campaign) {
+        const updatedCampaigns = campaigns.map(c => 
+          c.id === donationData.campaignId 
+            ? { ...c, raised: c.raised + donationData.amount }
+            : c
+        );
+        setCampaigns(updatedCampaigns);
+        localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
+      }
     }
   };
 
   const getDonations = async (campaignId: number): Promise<Donation[]> => {
-    // Return donations from localStorage (demo mode)
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const { data, error } = await supabase
+          .from('donations')
+          .select('*')
+          .eq('campaign_id', campaignId)
+          .order('timestamp', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data) {
+          return data.map((row: DonationRow) => ({
+            id: row.id,
+            campaignId: row.campaign_id,
+            donor: row.donor,
+            amount: row.amount,
+            message: row.message,
+            timestamp: row.timestamp,
+          }));
+        }
+        return [];
+      } catch (err) {
+        console.error('Failed to fetch donations from Supabase:', err);
+        return donations.filter(d => d.campaignId === campaignId);
+      }
+    }
+    
+    // Fallback to localStorage
     return donations.filter(d => d.campaignId === campaignId);
   };
 

@@ -1,0 +1,33 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase credentials not set. Using localStorage fallback.');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export interface CampaignRow {
+  id: number;
+  title: string;
+  description: string;
+  goal: number;
+  raised: number;
+  deadline: number;
+  owner: string;
+  active: boolean;
+  withdrawn: boolean;
+  created_at: number;
+  cap_donations_at_goal: boolean;
+}
+
+export interface DonationRow {
+  id: number;
+  campaign_id: number;
+  donor: string;
+  amount: number;
+  message: string;
+  timestamp: number;
+}

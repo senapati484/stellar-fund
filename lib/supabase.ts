@@ -4,9 +4,13 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 // Support both new PUBLISHABLE_KEY and legacy ANON_KEY
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Not set');
+console.log('Supabase Key:', supabaseAnonKey ? 'Set' : 'Not set');
+
 let supabaseInstance: ReturnType<typeof createClient> | null = null;
 
 if (supabaseUrl && supabaseAnonKey) {
+  console.log('Initializing Supabase client...');
   supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
 } else {
   console.warn('Supabase credentials not set. Using localStorage fallback.');

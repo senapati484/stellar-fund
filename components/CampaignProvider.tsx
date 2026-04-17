@@ -120,6 +120,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [refreshCampaigns]);
 
   const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
+    console.log('Goal value being saved:', campaignData.goal, 'from string:', campaignData.goal);
     const id = Date.now();
     const newCampaign: Campaign = {
       title: String(campaignData.title || ''),
@@ -135,7 +136,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
     };
 
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.log('Supabase client exists:', !!supabase);
+    console.log('SUPABASE_URL set:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('SUPABASE_KEY set:', !!(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
+
+    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
+      console.log('Attempting to save campaign to Supabase...');
       try {
         const { error } = await (supabase as any).from(TABLES.CAMPAIGNS).insert({
           id,
@@ -151,8 +157,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           cap_donations_at_goal: newCampaign.capDonationsAtGoal,
         });
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase insert error:', error);
+          throw error;
+        }
         
+        console.log('Campaign saved to Supabase successfully');
         // Refresh to get the new campaign
         await refreshCampaigns();
       } catch (err) {
@@ -160,12 +170,14 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     } else {
+      console.log('Supabase not configured, using localStorage fallback');
       // Fallback to localStorage
       const updatedCampaigns = [...campaigns, newCampaign];
       setCampaigns(updatedCampaigns);
       localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
     }
     
+    console.log('Campaign added with ID:', id);
     return id;
   };
 

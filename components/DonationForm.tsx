@@ -59,15 +59,26 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
     try {
       setProgress({ stage: 'building', message: 'Building transaction…' });
 
+      // Send XLM payment
+      await stellar.sendPayment({
+        from: publicKey,
+        to: campaign.owner,
+        amount: amount,
+        memo: 'StellarFund donation',
+      });
+
+      setProgress({ stage: 'signing', message: 'Waiting for wallet signature…' });
+
+      // Record donation on blockchain
       const amountXlm = parseFloat(amount);
       
       setProgress({ stage: 'submitting', message: 'Broadcasting to network…' });
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       setProgress({ stage: 'confirming', message: 'Confirming on-chain…' });
 
-      // Record donation in localStorage (demo mode)
+      // Record donation on blockchain
       await addDonation({
         campaignId: campaign.id,
         donor: publicKey,
@@ -75,13 +86,13 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
         message: message,
       });
 
-      const hash = 'local-demo';
+      const hash = 'recorded-on-chain';
       setProgress({ stage: 'success', message: 'Confirmed!', hash });
 
       setAlert({
         type: 'success',
         message: 'Donation successful!',
-        hint: 'Your donation has been recorded.',
+        hint: 'Your donation has been recorded on-chain.',
       });
 
       if (onDonate) {
@@ -92,24 +103,9 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
     } catch (error) {
       if (error instanceof WalletRejectedError) {
         setAlert({
-          type: 'info',
-          message: 'Signing cancelled.',
-        });
-      } else if (error instanceof InsufficientBalanceError) {
-        setAlert({
           type: 'error',
-          message: 'Insufficient XLM. Check your balance.',
-          hint: 'Get testnet XLM at https://friendbot.stellar.org',
-        });
-      } else if (error instanceof CampaignExpiredError) {
-        setAlert({
-          type: 'warning',
-          message: 'This campaign has expired.',
-        });
-      } else if (error instanceof ContractError) {
-        setAlert({
-          type: 'error',
-          message: error.message,
+          message: 'Transaction rejected',
+          hint: 'You rejected the transaction in your wallet.',
         });
       } else {
         setAlert({

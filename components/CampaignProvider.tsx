@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { FundContractClient, Campaign as ContractCampaign, Donation as ContractDonation } from '@/lib/contract-client';
-import { supabase, type CampaignRow, type DonationRow, TABLES } from '@/lib/supabase';
 
 export interface Campaign extends ContractCampaign {}
 
@@ -13,17 +12,18 @@ interface CampaignContextType {
   donations: Donation[];
   loading: boolean;
   error: string | null;
-  refreshCampaigns: () => Promise<void>;
+  client: FundContractClient | null;
   addCampaign: (campaign: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => Promise<number>;
-  getCampaign: (id: number) => Campaign | undefined;
-  updateCampaign: (id: number, updates: Partial<Campaign>) => void;
-  clearCampaigns: () => void;
   addDonation: (donation: Omit<Donation, 'timestamp'>) => Promise<void>;
   getDonations: (campaignId: number) => Promise<Donation[]>;
+  getCampaign: (id: number) => Campaign | undefined;
+  updateCampaign: (id: number, updates: Partial<Campaign>) => void;
+  refreshCampaigns: () => Promise<void>;
+  clearCampaigns: () => void;
   clearDonations: () => void;
 }
 
-const CampaignContext = createContext<CampaignContextType | null>(null);
+const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
 
 export function useCampaigns() {
   const context = useContext(CampaignContext);
@@ -38,77 +38,40 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [client, setClient] = useState<FundContractClient | null>(null);
 
-  // Initialize data source - try Supabase first, fallback to localStorage
+  // Initialize blockchain contract client
   useEffect(() => {
-    const initDataSource = async () => {
-      if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        console.log('Using Supabase for shared data');
-        setError(null);
-      } else {
-        console.log('Supabase not configured - using localStorage (data not shared)');
-        setError('Supabase not configured. Using localStorage - campaigns are NOT shared across users.');
-      }
-    };
-    initDataSource();
+    try {
+      const fundClient = new FundContractClient((progress) => {
+        console.log('Contract progress:', progress);
+      });
+      setClient(fundClient);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to initialize contract client:', err);
+      setError('Failed to connect to blockchain. Check contract ID.');
+    }
   }, []);
 
-  // Fetch campaigns from Supabase - shared across all users
+  // Fetch campaigns from blockchain - shared across all users
   const refreshCampaigns = useCallback(async () => {
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      try {
-        const { data, error } = await (supabase as any)
-          .from(TABLES.CAMPAIGNS)
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        
-        if (data) {
-          const campaigns = data.map((row: CampaignRow) => ({
-            id: row.id,
-            title: row.title,
-            description: row.description,
-            goal: row.goal,
-            raised: row.raised,
-            deadline: row.deadline,
-            owner: row.owner,
-            active: row.active,
-            withdrawn: row.withdrawn,
-            createdAt: row.created_at,
-            capDonationsAtGoal: row.cap_donations_at_goal,
-          }));
-          setCampaigns(campaigns);
-          console.log('Campaigns loaded from Supabase:', campaigns.length);
-        }
-      } catch (err) {
-        console.error('Failed to fetch campaigns from Supabase:', err);
-        setError('Failed to load campaigns from Supabase. Using localStorage.');
-        // Fallback to localStorage
-        const stored = localStorage.getItem('sf_campaigns');
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            setCampaigns(parsed);
-          } catch (e) {
-            console.error('Failed to parse campaigns from localStorage:', e);
-          }
-        }
-      }
-    } else {
-      // Fallback to localStorage
-      const stored = localStorage.getItem('sf_campaigns');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setCampaigns(parsed);
-        } catch (err) {
-          console.error('Failed to parse campaigns from localStorage:', err);
-        }
-      }
+    if (!client) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  }, []);
+
+    try {
+      const { campaigns: fetchedCampaigns } = await client.getAllCampaigns();
+      setCampaigns(fetchedCampaigns);
+      console.log('Campaigns loaded from blockchain:', fetchedCampaigns.length);
+    } catch (err) {
+      console.error('Failed to fetch campaigns from blockchain:', err);
+      setError('Failed to load campaigns from blockchain.');
+    } finally {
+      setLoading(false);
+    }
+  }, [client]);
 
   // Load campaigns on mount
   useEffect(() => {
@@ -120,65 +83,32 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [refreshCampaigns]);
 
   const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
-    console.log('Goal value being saved:', campaignData.goal, 'from string:', campaignData.goal);
-    const id = Date.now();
-    const newCampaign: Campaign = {
-      title: String(campaignData.title || ''),
-      description: String(campaignData.description || ''),
-      goal: Number(campaignData.goal) || 0,
-      deadline: Number(campaignData.deadline) || 0,
-      owner: String(campaignData.owner || ''),
-      id,
-      raised: 0,
-      active: true,
-      withdrawn: false,
-      createdAt: Math.floor(Date.now() / 1000),
-      capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
-    };
-
-    console.log('Supabase client exists:', !!supabase);
-    console.log('SUPABASE_URL set:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log('SUPABASE_KEY set:', !!(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY));
-
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)) {
-      console.log('Attempting to save campaign to Supabase...');
-      try {
-        const { error } = await (supabase as any).from(TABLES.CAMPAIGNS).insert({
-          id,
-          title: newCampaign.title,
-          description: newCampaign.description,
-          goal: newCampaign.goal,
-          raised: newCampaign.raised,
-          deadline: newCampaign.deadline,
-          owner: newCampaign.owner,
-          active: newCampaign.active,
-          withdrawn: newCampaign.withdrawn,
-          created_at: newCampaign.createdAt,
-          cap_donations_at_goal: newCampaign.capDonationsAtGoal,
-        });
-        
-        if (error) {
-          console.error('Supabase insert error:', error);
-          throw error;
-        }
-        
-        console.log('Campaign saved to Supabase successfully');
-        // Refresh to get the new campaign
-        await refreshCampaigns();
-      } catch (err) {
-        console.error('Failed to add campaign to Supabase:', err);
-        throw err;
-      }
-    } else {
-      console.log('Supabase not configured, using localStorage fallback');
-      // Fallback to localStorage
-      const updatedCampaigns = [...campaigns, newCampaign];
-      setCampaigns(updatedCampaigns);
-      localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
+    if (!client) {
+      throw new Error('Blockchain contract not available');
     }
-    
-    console.log('Campaign added with ID:', id);
-    return id;
+
+    try {
+      // Calculate duration from deadline
+      const durationDays = Math.ceil((campaignData.deadline - Math.floor(Date.now() / 1000)) / (24 * 60 * 60));
+      
+      // Create campaign on blockchain
+      await client.createCampaign({
+        ownerKey: campaignData.owner,
+        title: campaignData.title,
+        description: campaignData.description,
+        goalXlm: campaignData.goal,
+        durationDays: Math.max(1, durationDays)
+      });
+
+      // Refresh to get the new campaign from blockchain
+      await refreshCampaigns();
+      
+      // Return a generated ID (actual ID comes from blockchain)
+      return Date.now();
+    } catch (err) {
+      console.error('Failed to create campaign on blockchain:', err);
+      throw err;
+    }
   };
 
   const getCampaign = (id: number) => {
@@ -197,12 +127,6 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         return c;
       });
 
-      // Save to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
-        console.log('Updated campaigns saved to localStorage:', updatedCampaigns);
-      }
-
       return updatedCampaigns;
     });
   };
@@ -210,108 +134,46 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const clearCampaigns = () => {
     setCampaigns([]);
     setDonations([]);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('sf_campaigns');
-      localStorage.removeItem('sf_donations');
-      console.log('Campaigns and donations cleared from localStorage');
-    }
   };
 
   const addDonation = async (donationData: Omit<Donation, 'timestamp'>) => {
-    const newDonation: Donation = {
-      ...donationData,
-      timestamp: Math.floor(Date.now() / 1000),
-    };
+    if (!client) {
+      throw new Error('Blockchain contract not available');
+    }
 
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      try {
-        // Add donation to Supabase
-        const { error: donationError } = await (supabase as any).from(TABLES.DONATIONS).insert({
-          id: Date.now(),
-          campaign_id: newDonation.campaignId,
-          donor: newDonation.donor,
-          amount: newDonation.amount,
-          message: newDonation.message,
-          timestamp: newDonation.timestamp,
-        });
-        
-        if (donationError) throw donationError;
-        
-        // Update campaign raised amount
-        const campaign = campaigns.find(c => c.id === donationData.campaignId);
-        if (campaign) {
-          const { error: updateError } = await (supabase as any)
-            .from(TABLES.CAMPAIGNS)
-            .update({ raised: campaign.raised + donationData.amount })
-            .eq('id', donationData.campaignId);
-          
-          if (updateError) throw updateError;
-          
-          // Refresh campaigns to get updated data
-          await refreshCampaigns();
-        }
-      } catch (err) {
-        console.error('Failed to add donation to Supabase:', err);
-        throw err;
-      }
-    } else {
-      // Fallback to localStorage
-      const updatedDonations = [...donations, newDonation];
-      setDonations(updatedDonations);
-      localStorage.setItem('sf_donations', JSON.stringify(updatedDonations));
+    try {
+      // Submit donation to blockchain using recordDonation
+      await client.recordDonation({
+        donorKey: donationData.donor,
+        campaignId: donationData.campaignId,
+        amountXlm: donationData.amount,
+        message: donationData.message
+      });
 
-      // Update campaign raised amount
-      const campaign = campaigns.find(c => c.id === donationData.campaignId);
-      if (campaign) {
-        const updatedCampaigns = campaigns.map(c => 
-          c.id === donationData.campaignId 
-            ? { ...c, raised: c.raised + donationData.amount }
-            : c
-        );
-        setCampaigns(updatedCampaigns);
-        localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
-      }
+      // Refresh campaigns to get updated raised amount
+      await refreshCampaigns();
+    } catch (err) {
+      console.error('Failed to submit donation to blockchain:', err);
+      throw err;
     }
   };
 
   const getDonations = async (campaignId: number): Promise<Donation[]> => {
-    if (supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      try {
-        const { data, error } = await (supabase as any)
-          .from(TABLES.DONATIONS)
-          .select('*')
-          .eq('campaign_id', campaignId)
-          .order('timestamp', { ascending: false });
-        
-        if (error) throw error;
-        
-        if (data) {
-          return data.map((row: DonationRow) => ({
-            id: row.id,
-            campaignId: row.campaign_id,
-            donor: row.donor,
-            amount: row.amount,
-            message: row.message,
-            timestamp: row.timestamp,
-          }));
-        }
-        return [];
-      } catch (err) {
-        console.error('Failed to fetch donations from Supabase:', err);
-        return donations.filter(d => d.campaignId === campaignId);
-      }
+    if (!client) {
+      throw new Error('Blockchain contract not available');
     }
-    
-    // Fallback to localStorage
-    return donations.filter(d => d.campaignId === campaignId);
+
+    try {
+      const { donations: fetchedDonations } = await client.getDonations(campaignId, true);
+      return fetchedDonations;
+    } catch (err) {
+      console.error('Failed to fetch donations from blockchain:', err);
+      return [];
+    }
   };
 
   const clearDonations = () => {
     setDonations([]);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('sf_donations');
-      console.log('Donations cleared from localStorage');
-    }
   };
 
   return (
@@ -320,6 +182,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       donations, 
       loading,
       error,
+      client,
       refreshCampaigns,
       addCampaign, 
       getCampaign, 

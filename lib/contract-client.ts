@@ -236,8 +236,11 @@ class FundContractClient {
 
       console.log('[ContractClient] Creating campaign with goal:', goalStroops, 'stroops');
 
-      // Step 1: Build transaction for simulation
-      const txForSim = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+      // Step 1: Get account once for both simulation and assembly
+      const account = await this.server.getAccount(normalizedOwner);
+
+      // Step 2: Build transaction for simulation
+      const txForSim = new TransactionBuilder(account, {
         fee: BASE_FEE,
         networkPassphrase: Networks.TESTNET,
       })
@@ -254,12 +257,10 @@ class FundContractClient {
         .setTimeout(300)
         .build();
 
-      // Step 2: Simulate to get proper fee and soroban data
+      // Step 3: Simulate to get proper fee and soroban data
       console.log('[ContractClient] Simulating transaction...');
       const simResponse = await this.server.simulateTransaction(txForSim) as any;
-      console.log('[ContractClient] Simulation response keys:', Object.keys(simResponse));
       console.log('[ContractClient] Simulation minResourceFee:', simResponse.minResourceFee);
-      console.log('[ContractClient] Simulation transactionData:', !!simResponse.transactionData);
 
       // Check for simulation errors using SDK type guard
       if (Api.isSimulationError(simResponse)) {
@@ -268,12 +269,12 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${errorMsg}`);
       }
 
-      // Step 3: Build final transaction using assembleTransaction
+      // Step 4: Assemble using txForSim (not rebuilding)
       const minFee = simResponse.minResourceFee || BASE_FEE;
+      console.log('[ContractClient] Assembling final tx with minFee:', minFee);
 
-      console.log('[ContractClient] Building final tx with minFee:', minFee);
-
-      const txForAssembly = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+      // Clone txForSim with proper fee then assemble
+      const txForAssembly = new TransactionBuilder(account, {
         fee: String(minFee),
         networkPassphrase: Networks.TESTNET,
       })
@@ -290,11 +291,8 @@ class FundContractClient {
         .setTimeout(300)
         .build();
 
-      console.log('[ContractClient] txForAssembly type:', typeof txForAssembly, txForAssembly?.constructor?.name);
       const assembledTxBuilder = assembleTransaction(txForAssembly, simResponse);
-      console.log('[ContractClient] assembledTxBuilder type:', typeof assembledTxBuilder, assembledTxBuilder?.constructor?.name);
       const finalTx = assembledTxBuilder.build();
-      console.log('[ContractClient] finalTx type:', typeof finalTx, finalTx?.constructor?.name);
       const txXdr = finalTx.toXDR();
 
       console.log('[ContractClient] Submitting transaction...');
@@ -326,8 +324,11 @@ class FundContractClient {
 
       console.log('[ContractClient] Recording donation:', amountStroops, 'stroops to campaign:', params.campaignId);
 
-      // Step 1: Build transaction for simulation
-      const txForSim = new TransactionBuilder(await this.server.getAccount(normalizedDonor), {
+      // Step 1: Get account once for both simulation and assembly
+      const account = await this.server.getAccount(normalizedDonor);
+
+      // Step 2: Build transaction for simulation
+      const txForSim = new TransactionBuilder(account, {
         fee: BASE_FEE,
         networkPassphrase: Networks.TESTNET,
       })
@@ -343,19 +344,18 @@ class FundContractClient {
         .setTimeout(300)
         .build();
 
-      // Step 2: Simulate to get proper fee and soroban data
+      // Step 3: Simulate to get proper fee and soroban data
       console.log('[ContractClient] Simulating donation transaction...');
       const simResponse = await this.server.simulateTransaction(txForSim) as any;
-      console.log('[ContractClient] Donation simulation response:', JSON.stringify(simResponse).substring(0, 500));
 
       if (simResponse.error || simResponse.status === "error") {
         throw new Error(`Simulation failed: ${simResponse.error?.message || simResponse.error || "Unknown error"}`);
       }
 
-      // Step 3: Build final transaction using assembleTransaction
+      // Step 4: Build final transaction using assembleTransaction
       const minFee = simResponse.minResourceFee || BASE_FEE;
 
-      const txForAssembly = new TransactionBuilder(await this.server.getAccount(normalizedDonor), {
+      const txForAssembly = new TransactionBuilder(account, {
         fee: String(minFee),
         networkPassphrase: Networks.TESTNET,
       })
@@ -397,8 +397,11 @@ class FundContractClient {
 
       console.log('[ContractClient] Withdrawing from campaign:', campaignId);
 
-      // Step 1: Build transaction for simulation
-      const txForSim = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+      // Step 1: Get account once for both simulation and assembly
+      const account = await this.server.getAccount(normalizedOwner);
+
+      // Step 2: Build transaction for simulation
+      const txForSim = new TransactionBuilder(account, {
         fee: BASE_FEE,
         networkPassphrase: Networks.TESTNET,
       })
@@ -406,7 +409,7 @@ class FundContractClient {
         .setTimeout(300)
         .build();
 
-      // Step 2: Simulate to get proper fee and soroban data
+      // Step 3: Simulate to get proper fee and soroban data
       console.log('[ContractClient] Simulating withdraw transaction...');
       const simResponse = await this.server.simulateTransaction(txForSim) as any;
 
@@ -414,10 +417,10 @@ class FundContractClient {
         throw new Error(`Simulation failed: ${simResponse.error?.message || simResponse.error || "Unknown error"}`);
       }
 
-      // Step 3: Build final transaction using assembleTransaction
+      // Step 4: Build final transaction using assembleTransaction
       const minFee = simResponse.minResourceFee || BASE_FEE;
 
-      const txForAssembly = new TransactionBuilder(await this.server.getAccount(normalizedOwner), {
+      const txForAssembly = new TransactionBuilder(account, {
         fee: String(minFee),
         networkPassphrase: Networks.TESTNET,
       })

@@ -129,10 +129,14 @@ class StellarHelper {
 
       const result = await signTransaction(params.xdr, {
         networkPassphrase: params.network,
-      });
+      }) as any;
 
       if (!result || result.error) {
-        throw new Error(result?.error?.message || "Failed to sign transaction");
+        throw new Error(
+          typeof result?.error === "string"
+            ? result.error
+            : result?.error?.message ?? "Failed to sign transaction"
+        );
       }
 
       return { signedXdr: result.signedTxXdr };

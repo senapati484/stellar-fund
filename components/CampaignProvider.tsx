@@ -39,17 +39,13 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [client, setClient] = useState<FundContractClient | null>(null);
 
-  // Initialize contract client
+  // Initialize contract client - DISABLED due to testnet issues
+  // Using localStorage-only mode for now
   useEffect(() => {
-    try {
-      const fundClient = new FundContractClient((progress) => {
-        console.log('Contract progress:', progress);
-      });
-      setClient(fundClient);
-    } catch (err) {
-      console.error('Failed to initialize contract client:', err);
-      setError('Blockchain contract not available. Using local storage mode.');
-    }
+    console.log('Blockchain integration disabled - using localStorage mode');
+    setError('Demo mode: Using local storage. Campaigns are NOT shared across users.');
+    // Don't initialize blockchain client
+    setClient(null);
   }, []);
 
   // Fetch campaigns from blockchain - shared across all users
@@ -105,32 +101,27 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   }, [refreshCampaigns]);
 
   const addCampaign = async (campaignData: Omit<Campaign, 'id' | 'raised' | 'active' | 'withdrawn' | 'createdAt'>) => {
-    if (!client) {
-      throw new Error('Blockchain contract not available');
-    }
+    // Create campaign in localStorage (demo mode)
+    const id = Date.now();
+    const newCampaign: Campaign = {
+      title: String(campaignData.title || ''),
+      description: String(campaignData.description || ''),
+      goal: Number(campaignData.goal) || 0,
+      deadline: Number(campaignData.deadline) || 0,
+      owner: String(campaignData.owner || ''),
+      id,
+      raised: 0,
+      active: true,
+      withdrawn: false,
+      createdAt: Math.floor(Date.now() / 1000),
+      capDonationsAtGoal: campaignData.capDonationsAtGoal ?? true,
+    };
 
-    try {
-      // Calculate duration from deadline
-      const durationDays = Math.ceil((campaignData.deadline - Math.floor(Date.now() / 1000)) / (24 * 60 * 60));
-      
-      // Create campaign on blockchain
-      await client.createCampaign({
-        ownerKey: campaignData.owner,
-        title: campaignData.title,
-        description: campaignData.description,
-        goalXlm: campaignData.goal,
-        durationDays: Math.max(1, durationDays)
-      });
-
-      // Refresh to get the new campaign from blockchain
-      await refreshCampaigns();
-      
-      // Return a generated ID (actual ID comes from blockchain)
-      return Date.now();
-    } catch (err) {
-      console.error('Failed to create campaign on blockchain:', err);
-      throw err;
-    }
+    const updatedCampaigns = [...campaigns, newCampaign];
+    setCampaigns(updatedCampaigns);
+    localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
+    
+    return id;
   };
 
   const getCampaign = (id: number) => {
@@ -170,41 +161,32 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   };
 
   const addDonation = async (donationData: Omit<Donation, 'timestamp'>) => {
-    if (!client) {
-      throw new Error('Blockchain contract not available');
-    }
+    // Record donation in localStorage (demo mode)
+    const newDonation: Donation = {
+      ...donationData,
+      timestamp: Math.floor(Date.now() / 1000),
+    };
 
-    try {
-      // Submit donation to blockchain using recordDonation
-      await client.recordDonation({
-        donorKey: donationData.donor,
-        campaignId: donationData.campaignId,
-        amountXlm: donationData.amount,
-        message: donationData.message
-      });
+    const updatedDonations = [...donations, newDonation];
+    setDonations(updatedDonations);
+    localStorage.setItem('sf_donations', JSON.stringify(updatedDonations));
 
-      // Refresh campaigns to get updated raised amount
-      await refreshCampaigns();
-    } catch (err) {
-      console.error('Failed to submit donation to blockchain:', err);
-      throw err;
+    // Update campaign raised amount
+    const campaign = campaigns.find(c => c.id === donationData.campaignId);
+    if (campaign) {
+      const updatedCampaigns = campaigns.map(c => 
+        c.id === donationData.campaignId 
+          ? { ...c, raised: c.raised + donationData.amount }
+          : c
+      );
+      setCampaigns(updatedCampaigns);
+      localStorage.setItem('sf_campaigns', JSON.stringify(updatedCampaigns));
     }
   };
 
   const getDonations = async (campaignId: number): Promise<Donation[]> => {
-    if (!client) {
-      // Fallback to localStorage
-      return donations.filter(d => d.campaignId === campaignId);
-    }
-
-    try {
-      const { donations: fetchedDonations } = await client.getDonations(campaignId, true);
-      return fetchedDonations;
-    } catch (err) {
-      console.error('Failed to fetch donations from blockchain:', err);
-      // Fallback to localStorage
-      return donations.filter(d => d.campaignId === campaignId);
-    }
+    // Return donations from localStorage (demo mode)
+    return donations.filter(d => d.campaignId === campaignId);
   };
 
   const clearDonations = () => {

@@ -59,26 +59,15 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
     try {
       setProgress({ stage: 'building', message: 'Building transaction…' });
 
-      // Send XLM payment
-      await stellar.sendPayment({
-        from: publicKey,
-        to: campaign.owner,
-        amount: amount,
-        memo: 'StellarFund donation',
-      });
-
-      setProgress({ stage: 'signing', message: 'Waiting for wallet signature…' });
-
-      // Record donation in contract
       const amountXlm = parseFloat(amount);
       
       setProgress({ stage: 'submitting', message: 'Broadcasting to network…' });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       setProgress({ stage: 'confirming', message: 'Confirming on-chain…' });
 
-      // Record donation on blockchain
+      // Record donation in localStorage (demo mode)
       await addDonation({
         campaignId: campaign.id,
         donor: publicKey,
@@ -86,13 +75,13 @@ export function DonationForm({ campaign, publicKey, onSuccess, onDonate }: Donat
         message: message,
       });
 
-      const hash = 'recorded-on-chain';
+      const hash = 'local-demo';
       setProgress({ stage: 'success', message: 'Confirmed!', hash });
 
       setAlert({
         type: 'success',
         message: 'Donation successful!',
-        hint: 'Your donation has been recorded on-chain.',
+        hint: 'Demo mode: Donation recorded in local storage.',
       });
 
       if (onDonate) {

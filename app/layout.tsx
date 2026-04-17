@@ -41,6 +41,9 @@ export default function RootLayout({
       className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-textMain" suppressHydrationWarning>
+      <div className="bg-yellow-500 text-black text-center text-xs py-2 font-medium">
+        ⚠️ Demo Mode: Using local storage. Campaigns are NOT shared across users.
+      </div>
       <Providers>{children}</Providers>
     </body>
     </html>

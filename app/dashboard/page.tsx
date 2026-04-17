@@ -14,17 +14,32 @@ export default function DashboardPage() {
   const { publicKey, isConnected } = useWallet();
   const { campaigns, updateCampaign, clearCampaigns, getDonations } = useCampaigns();
   const [loading, setLoading] = useState(false);
+  const [campaignDonorCounts, setCampaignDonorCounts] = useState<Record<number, number>>({});
 
   const userCampaigns = publicKey
     ? campaigns.filter(c => c.owner === publicKey)
     : [];
 
-  // Calculate donor counts for each campaign
-  const campaignDonorCounts = userCampaigns.reduce((acc, campaign) => {
-    const donations = getDonations(campaign.id);
-    acc[campaign.id] = donations.length;
-    return acc;
-  }, {} as Record<number, number>);
+  // Load donor counts asynchronously
+  useEffect(() => {
+    const loadDonorCounts = async () => {
+      const counts: Record<number, number> = {};
+      for (const campaign of userCampaigns) {
+        try {
+          const donations = await getDonations(campaign.id);
+          counts[campaign.id] = donations.length;
+        } catch (err) {
+          console.error('Failed to load donations for campaign:', campaign.id, err);
+          counts[campaign.id] = 0;
+        }
+      }
+      setCampaignDonorCounts(counts);
+    };
+
+    if (userCampaigns.length > 0) {
+      loadDonorCounts();
+    }
+  }, [userCampaigns, getDonations]);
 
   const totalRaised = userCampaigns.reduce((sum, c) => sum + c.raised, 0);
   const activeCampaigns = userCampaigns.filter(c => c.active).length;
@@ -33,9 +48,18 @@ export default function DashboardPage() {
   const handleWithdraw = async (campaignId: number) => {
     if (!publicKey) return;
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { FundContractClient } = await import('@/lib/contract-client');
+      const client = new FundContractClient((progress) => {
+        console.log('Withdraw progress:', progress);
+      });
+      await client.withdraw(publicKey, campaignId);
+      
+      // Update local state
+      updateCampaign(campaignId, { withdrawn: true, active: false });
+      alert('Funds withdrawn successfully!');
     } catch (error) {
       console.error('Failed to withdraw:', error);
+      alert('Failed to withdraw funds. Please try again.');
     }
   };
 

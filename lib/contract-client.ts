@@ -33,28 +33,6 @@ function normalizeAddress(address: string): string {
   }
 }
 
-// Alternative: Use Address.account() for public key addresses
-function encodeAddressToScVal(address: string) {
-  // For Stellar public keys (G...), use Address.account()
-  try {
-    if (address.startsWith('G') && address.length === 56) {
-      // Convert G... address to Buffer and create account address
-      const buffer = StrKey.decodeEd25519PublicKey(address);
-      return Address.account(buffer).toScVal();
-    }
-    // Fallback to fromString for other formats
-    return Address.fromString(address).toScVal();
-  } catch {
-    // Final fallback to manual normalization
-    const normalized = normalizeAddress(address);
-    if (normalized.startsWith('G') && normalized.length === 56) {
-      const buffer = StrKey.decodeEd25519PublicKey(normalized);
-      return Address.account(buffer).toScVal();
-    }
-    return Address.fromString(normalized).toScVal();
-  }
-}
-
 import { stellar } from "./stellar-helper";
 
 export type TxProgress =
@@ -240,7 +218,7 @@ export class FundContractClient {
       .addOperation(
         contract.call(
           "create_campaign",
-          encodeAddressToScVal(params.ownerKey),
+          Address.fromString(params.ownerKey).toScVal(),
           xdr.ScVal.scvString(params.title),
           xdr.ScVal.scvString(params.description),
           goalVal,
@@ -253,7 +231,13 @@ export class FundContractClient {
     // Log XDR for debugging
     console.log('Transaction XDR:', tx.toXDR());
     console.log('Owner key:', params.ownerKey);
-    console.log('Encoded Address:', encodeAddressToScVal(params.ownerKey));
+    console.log('Title:', params.title);
+    console.log('Description:', params.description);
+    console.log('Goal XLM:', params.goalXlm);
+    console.log('Goal Stroops:', goalStroops);
+    console.log('Duration Days:', params.durationDays);
+    console.log('Goal Val type:', goalVal);
+    console.log('Address type:', Address.fromString(params.ownerKey).toScVal());
 
     // Simulate transaction before submission to catch errors early
     try {
